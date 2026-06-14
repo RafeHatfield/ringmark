@@ -28,7 +28,7 @@ export type ObjectStatus =
 export type SpeciesConfidence = 'confirmed' | 'likely' | 'guessed' | 'unknown'
 export type LineageConfidence = 'exact' | 'probable' | 'batch_level' | 'unknown'
 
-export interface Account {
+export type Account = {
   id: string
   owner_user_id: string
   name: string
@@ -42,7 +42,7 @@ export type AccountInsert = Omit<Account, 'id' | 'created_at' | 'updated_at'> &
 
 export type AccountUpdate = Partial<AccountInsert>
 
-export interface WoodObject {
+export type WoodObject = {
   id: string
   account_id: string
   workshop_id: string
@@ -74,7 +74,7 @@ export type WoodObjectInsert = Omit<WoodObject, 'id' | 'created_at' | 'updated_a
 
 export type WoodObjectUpdate = Partial<WoodObjectInsert>
 
-export interface ObjectPhoto {
+export type ObjectPhoto = {
   id: string
   account_id: string
   object_id: string
@@ -99,20 +99,23 @@ export interface Database {
         Row: Account
         Insert: AccountInsert
         Update: AccountUpdate
+        Relationships: []
       }
       wood_objects: {
         Row: WoodObject
         Insert: WoodObjectInsert
         Update: WoodObjectUpdate
+        Relationships: []
       }
       object_photos: {
         Row: ObjectPhoto
         Insert: ObjectPhotoInsert
         Update: ObjectPhotoUpdate
+        Relationships: []
       }
     }
-    Views: Record<string, never>
-    Functions: Record<string, never>
-    Enums: Record<string, never>
+    Views: { [_ in never]: never }
+    Functions: { [_ in never]: never }
+    Enums: { [_ in never]: never }
   }
 }
