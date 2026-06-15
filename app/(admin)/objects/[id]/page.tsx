@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { OBJECT_TYPES } from '@/lib/constants'
 import { StatusChanger } from '@/components/status-changer'
 import { PhotoSection, type PhotoData } from '@/components/photo-section'
+import { DeleteObjectButton } from '@/components/delete-object-button'
 
 export default async function ObjectDetailPage({
   params,
@@ -279,7 +280,7 @@ export default async function ObjectDetailPage({
       </section>
 
       {/* QR */}
-      <section>
+      <section className="mb-12">
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
           QR
         </h2>
@@ -292,6 +293,18 @@ export default async function ObjectDetailPage({
             QR Card
           </Link>
         </div>
+      </section>
+
+      {/* Danger zone */}
+      <section className="border-t pt-8">
+        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          Danger Zone
+        </h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Permanently deletes this object, all its photos, and removes it from any lineage trees.
+          Children are not deleted but become roots.
+        </p>
+        <DeleteObjectButton objectId={id} />
       </section>
     </main>
   )
