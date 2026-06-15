@@ -1,4 +1,18 @@
 {
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); cmd=$(echo \"$input\" | jq -r '.tool_input.command // empty'); if echo \"$cmd\" | grep -qE '^git push'; then cd /Users/rafehatfield/development/ringmark && PATH=\"/opt/homebrew/bin:$PATH\" npx next lint --quiet 2>&1 && PATH=\"/opt/homebrew/bin:$PATH\" npx tsc --noEmit 2>&1 || echo '{\"decision\":\"block\",\"reason\":\"Lint or type errors found — fix before pushing\"}'; fi",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "defaultMode": "dontAsk",
     "allow": [
