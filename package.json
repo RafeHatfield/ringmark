@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --experimental-strip-types --test '__tests__/unit/*.test.ts' --test '__tests__/security/*.test.ts'",
+    "test:unit": "node --experimental-strip-types --test '__tests__/unit/*.test.ts'",
+    "test:security": "node --experimental-strip-types --test '__tests__/security/*.test.ts'"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1",

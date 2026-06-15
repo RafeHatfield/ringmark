@@ -69,8 +69,32 @@ export type WoodObject = {
   updated_at: string
 }
 
-export type WoodObjectInsert = Omit<WoodObject, 'id' | 'created_at' | 'updated_at'> &
-  Partial<Pick<WoodObject, 'id' | 'created_at' | 'updated_at'>>
+export type WoodObjectInsert = {
+  account_id: string
+  workshop_id: string
+  workshop_id_lower: string
+  public_slug: string
+  object_type: ObjectType
+  id?: string
+  status?: ObjectStatus | null
+  title?: string | null
+  species?: string | null
+  species_confidence?: SpeciesConfidence | null
+  parent_id?: string | null
+  root_id?: string | null
+  lineage_confidence?: LineageConfidence | null
+  dimensions_text?: string | null
+  finish?: string | null
+  location_text?: string | null
+  private_notes?: string | null
+  public_notes?: string | null
+  public_title?: string | null
+  public_story?: string | null
+  public_care?: string | null
+  is_published?: boolean
+  created_at?: string
+  updated_at?: string
+}
 
 export type WoodObjectUpdate = Partial<WoodObjectInsert>
 
@@ -87,8 +111,18 @@ export type ObjectPhoto = {
   updated_at: string
 }
 
-export type ObjectPhotoInsert = Omit<ObjectPhoto, 'id' | 'created_at' | 'updated_at'> &
-  Partial<Pick<ObjectPhoto, 'id' | 'created_at' | 'updated_at'>>
+export type ObjectPhotoInsert = {
+  account_id: string
+  object_id: string
+  storage_path: string
+  id?: string
+  caption?: string | null
+  is_public?: boolean
+  sort_order?: number
+  captured_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
 
 export type ObjectPhotoUpdate = Partial<ObjectPhotoInsert>
 
