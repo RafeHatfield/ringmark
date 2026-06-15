@@ -6,101 +6,26 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function AuthPage() {
   const [email, setEmail] = useState('')
-  const [token, setToken] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [codeSent, setCodeSent] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
 
-  async function handleRequestCode(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    })
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (authError) {
       setError(authError.message)
-    } else {
-      setCodeSent(true)
-    }
-    setLoading(false)
-  }
-
-  async function handleVerifyCode(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    const supabase = createClient()
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'magiclink',
-    })
-
-    if (verifyError) {
-      setError(verifyError.message)
       setLoading(false)
     } else {
-      router.push('/')
+      router.replace('/')
       router.refresh()
     }
-  }
-
-  if (codeSent) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="max-w-sm w-full">
-          <div className="mb-8 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">Ringmark</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Check <strong>{email}</strong> for a 6-digit code.
-            </p>
-          </div>
-          <form onSubmit={handleVerifyCode} className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="token" className="block text-sm font-medium">
-                Code
-              </label>
-              <input
-                id="token"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={token}
-                onChange={(e) => setToken(e.target.value.replace(/\D/g, ''))}
-                placeholder="123456"
-                required
-                autoFocus
-                autoComplete="one-time-code"
-                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring tracking-widest text-center text-lg"
-              />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading || token.length < 6}
-              className="w-full bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Verifying…' : 'Sign in'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setCodeSent(false); setToken(''); setError('') }}
-              className="w-full text-sm text-muted-foreground hover:text-foreground"
-            >
-              Use a different email
-            </button>
-          </form>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -110,7 +35,7 @@ export default function AuthPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Ringmark</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to your workshop</p>
         </div>
-        <form onSubmit={handleRequestCode} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="email" className="block text-sm font-medium">
               Email
@@ -123,6 +48,21 @@ export default function AuthPage() {
               placeholder="you@example.com"
               required
               autoFocus
+              autoComplete="email"
+              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="block text-sm font-medium">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
               className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -132,7 +72,7 @@ export default function AuthPage() {
             disabled={loading}
             className="w-full bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Sending…' : 'Send code'}
+            {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </div>
