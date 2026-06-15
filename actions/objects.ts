@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { generateSlug } from '@/lib/slug-gen'
 import type { ObjectType, ObjectStatus, SpeciesConfidence, WoodObjectUpdate } from '@/lib/types'
+import { computeRootId } from '@/lib/lineage-utils'
 
 export type CreateObjectData = {
   workshop_id: string
@@ -147,17 +148,16 @@ export async function updateObject(
     const newParentId = data.parent_id ?? null
     payload.parent_id = newParentId
 
+    let newParentRootId: string | null = null
     if (newParentId) {
       const { data: newParent } = await supabase
         .from('wood_objects')
         .select('root_id')
         .eq('id', newParentId)
         .single()
-      payload.root_id = newParent?.root_id ?? null
-    } else {
-      // Becoming a root — point root_id at self
-      payload.root_id = id
+      newParentRootId = newParent?.root_id ?? null
     }
+    payload.root_id = computeRootId(newParentId, newParentRootId, id)
   }
 
   payload.updated_at = new Date().toISOString()
