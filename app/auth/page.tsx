@@ -18,7 +18,10 @@ export default function AuthPage() {
     setError('')
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithOtp({ email })
+    const { error: authError } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    })
 
     if (authError) {
       setError(authError.message)
