@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
@@ -148,9 +149,9 @@ export default async function PublicStoryPage({
       <footer className="border-t pt-4">
         <p className="text-xs text-muted-foreground">
           Tracked with{' '}
-          <a href="/" className="underline">
+          <Link href="/" className="underline">
             Ringmark
-          </a>
+          </Link>
         </p>
       </footer>
     </main>
