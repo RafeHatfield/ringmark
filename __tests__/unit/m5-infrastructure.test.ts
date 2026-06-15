@@ -191,6 +191,18 @@ describe('PWA manifest', () => {
     const manifest = JSON.parse(readFileSync(resolve('./public/manifest.json'), 'utf8'))
     assert.ok(Array.isArray(manifest.icons) && manifest.icons.length > 0, 'manifest must list at least one icon')
   })
+
+  it('every icon listed in the manifest actually exists in /public', () => {
+    const manifest = JSON.parse(readFileSync(resolve('./public/manifest.json'), 'utf8'))
+    const icons: { src: string }[] = manifest.icons ?? []
+    for (const icon of icons) {
+      const filePath = resolve(`./public${icon.src}`)
+      assert.ok(
+        existsSync(filePath),
+        `manifest icon "${icon.src}" is listed but the file does not exist at ${filePath} — browser will 404 for every page load`,
+      )
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------

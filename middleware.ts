@@ -12,13 +12,23 @@ export async function middleware(request: NextRequest) {
   if (isAdminRoute && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth'
-    return NextResponse.redirect(url)
+    const response = NextResponse.redirect(url)
+    // Copy refreshed session cookies so the auth page sees the correct state
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      response.cookies.set(cookie.name, cookie.value)
+    })
+    return response
   }
 
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
-    return NextResponse.redirect(url)
+    const response = NextResponse.redirect(url)
+    // Copy refreshed session cookies so the destination page sees the session
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      response.cookies.set(cookie.name, cookie.value)
+    })
+    return response
   }
 
   return supabaseResponse

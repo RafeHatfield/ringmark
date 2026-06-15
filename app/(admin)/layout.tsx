@@ -1,14 +1,8 @@
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  let account
-  try {
-    account = await getOrCreateAccount()
-  } catch {
-    redirect('/auth')
-  }
+  const account = await getOrCreateAccount()
 
   return (
     <div className="min-h-screen bg-background">
