@@ -9,7 +9,10 @@
     "lint": "next lint",
     "test": "node --experimental-strip-types --test '__tests__/unit/*.test.ts' --test '__tests__/security/*.test.ts'",
     "test:unit": "node --experimental-strip-types --test '__tests__/unit/*.test.ts'",
-    "test:security": "node --experimental-strip-types --test '__tests__/security/*.test.ts'"
+    "test:security": "node --experimental-strip-types --test '__tests__/security/*.test.ts'",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:all": "npm run test && npm run test:e2e"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1",
@@ -25,10 +28,12 @@
     "tailwind-merge": "^2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "^15",
     "postcss": "^8",
