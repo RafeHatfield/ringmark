@@ -79,10 +79,12 @@ test.describe('auth — non-owner access', () => {
     const ctx = await browser.newContext({ storageState: OTHER_AUTH_STATE })
     const page = await ctx.newPage()
 
-    const response = await page.goto(`/objects/${firstUserObjectId}`)
+    await page.goto(`/objects/${firstUserObjectId}`)
 
-    // Must be a 404 — not the object content, and not a redirect to /auth
-    expect(response?.status()).toBe(404)
+    // Must land on the not-found page — not the object, and not redirected to /auth.
+    // We assert on content rather than HTTP status because Next.js dev mode returns
+    // 200 for notFound() boundaries; the content check is what actually matters.
+    await expect(page.getByText('Object not found')).toBeVisible()
     await expect(page).not.toHaveURL(/\/auth/)
 
     await ctx.close()

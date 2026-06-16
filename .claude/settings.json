@@ -64,5 +64,8 @@
       "Bash(git branch -D*)",
       "Bash(rm -rf*)"
     ]
+  },
+  "env": {
+    "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
   }
 }
