@@ -14,7 +14,7 @@
     ]
   },
   "permissions": {
-    "defaultMode": "dontAsk",
+    "defaultMode": "acceptEdits",
     "allow": [
       "Read",
       "Write",

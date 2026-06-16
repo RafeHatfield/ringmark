@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test'
+import path from 'path'
 import { TEST_EMAIL, TEST_PASSWORD } from './helpers/supabase-admin'
+
+const AUTH_STATE = path.join(__dirname, '.auth/user.json')
+const OTHER_AUTH_STATE = path.join(__dirname, '.auth/other-user.json')
 
 // Auth tests deliberately do NOT use saved storage state — they test the login flow itself
 
@@ -52,5 +56,35 @@ test.describe('auth — already authenticated', () => {
   test('visiting /auth while logged in redirects to /', async ({ page }) => {
     await page.goto('/auth')
     await expect(page).toHaveURL('/')
+  })
+})
+
+test.describe('auth — non-owner access', () => {
+  let firstUserObjectId = ''
+
+  test.beforeAll(async ({ browser }) => {
+    // Create an object owned by the primary test user
+    const ctx = await browser.newContext({ storageState: AUTH_STATE })
+    const page = await ctx.newPage()
+    await page.goto('/objects/new?type=source')
+    await Promise.all([
+      page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+      page.getByRole('button', { name: 'Save' }).click(),
+    ])
+    firstUserObjectId = page.url().split('/objects/')[1]
+    await ctx.close()
+  })
+
+  test('authenticated non-owner cannot access another user\'s object', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: OTHER_AUTH_STATE })
+    const page = await ctx.newPage()
+
+    const response = await page.goto(`/objects/${firstUserObjectId}`)
+
+    // Must be a 404 — not the object content, and not a redirect to /auth
+    expect(response?.status()).toBe(404)
+    await expect(page).not.toHaveURL(/\/auth/)
+
+    await ctx.close()
   })
 })

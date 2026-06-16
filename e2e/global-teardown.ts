@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
-import { TEST_EMAIL, deleteTestData } from './helpers/supabase-admin'
+import { TEST_EMAIL, OTHER_TEST_EMAIL, deleteTestData } from './helpers/supabase-admin'
 
 dotenv.config({ path: path.join(process.cwd(), '.env.local') })
 
@@ -15,9 +15,12 @@ export default async function globalTeardown() {
   })
 
   const { data: { users } } = await client.auth.admin.listUsers()
-  const testUser = users.find(u => u.email === TEST_EMAIL)
-  if (!testUser) return
 
-  await deleteTestData(testUser.id)
+  const mainUser = users.find(u => u.email === TEST_EMAIL)
+  const otherUser = users.find(u => u.email === OTHER_TEST_EMAIL)
+
+  if (mainUser) await deleteTestData(mainUser.id)
+  if (otherUser) await deleteTestData(otherUser.id)
+
   console.log('  ✓ E2E test data cleaned up')
 }

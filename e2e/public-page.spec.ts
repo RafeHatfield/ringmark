@@ -9,14 +9,17 @@
  */
 import { test, expect } from '@playwright/test'
 import path from 'path'
+import { updateObjectAdmin } from './helpers/supabase-admin'
 
 // No file-level test.use({ storageState }) — it bleeds into browser.newContext() calls
 // Each test that needs auth receives it explicitly via storageState on { page } fixture or context
 const AUTH_STATE = path.join(__dirname, '.auth/user.json')
 const PRIVATE_NOTE = 'PUBPAGE_PRIVATE_CANARY_MUST_NOT_LEAK'
+const LOCATION_CANARY = 'LOCATION-TEXT-CANARY-E2E-2026'
 
 let publishedObjectId = ''
 let publishedSlug = ''
+let publishedWorkshopId = ''
 let unpublishedObjectId = ''
 let unpublishedSlug = ''
 
@@ -32,6 +35,10 @@ test.beforeAll(async ({ browser }) => {
     page.getByRole('button', { name: 'Save' }).click(),
   ])
   publishedObjectId = page.url().split('/objects/')[1]
+  publishedWorkshopId = (await page.locator('h1.font-mono').textContent())?.trim() ?? ''
+
+  // Set location_text canary directly — bypasses UI, tests the query layer
+  await updateObjectAdmin(publishedObjectId, { location_text: LOCATION_CANARY })
 
   // Write a story and publish
   await page.goto(`/objects/${publishedObjectId}/story`)
@@ -104,6 +111,28 @@ test('private_notes never appear on the anonymous public page', async ({ browser
   await page.goto(`/p/${publishedSlug}`)
   const bodyText = await page.locator('body').textContent()
   expect(bodyText).not.toContain(PRIVATE_NOTE)
+
+  await ctx.close()
+})
+
+test('location_text never appears on the anonymous public page', async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: undefined })
+  const page = await ctx.newPage()
+
+  await page.goto(`/p/${publishedSlug}`)
+  const html = await page.content()
+  expect(html).not.toContain(LOCATION_CANARY)
+
+  await ctx.close()
+})
+
+test('workshop_id never appears on the anonymous public page', async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: undefined })
+  const page = await ctx.newPage()
+
+  await page.goto(`/p/${publishedSlug}`)
+  const html = await page.content()
+  expect(html).not.toContain(publishedWorkshopId)
 
   await ctx.close()
 })

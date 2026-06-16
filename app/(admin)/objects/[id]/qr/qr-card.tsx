@@ -32,6 +32,18 @@ export default function QrCard({
     await navigator.clipboard.writeText(publicUrl)
   }
 
+  function handleDownload() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    // Safe to call toDataURL — canvas is untainted because QR is generated locally (no cross-origin image)
+    const dataUrl = canvas.toDataURL('image/png')
+    const safeName = workshopId.replace(/[^A-Za-z0-9-]/g, '-')
+    const a = document.createElement('a')
+    a.href = dataUrl
+    a.download = `ringmark-qr-${safeName}.png`
+    a.click()
+  }
+
   return (
     <div className="space-y-6">
       {/* Printable card */}
@@ -57,6 +69,12 @@ export default function QrCard({
           className="w-full px-4 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           Print card
+        </button>
+        <button
+          onClick={handleDownload}
+          className="w-full px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors"
+        >
+          Download QR
         </button>
         <button
           onClick={handleCopyUrl}
