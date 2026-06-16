@@ -57,6 +57,20 @@ test.describe('auth — already authenticated', () => {
     await page.goto('/auth')
     await expect(page).toHaveURL('/')
   })
+
+  test('sign out button is visible in the admin header', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  })
+
+  test('signing out redirects to /auth and clears the session', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(page).toHaveURL(/\/auth/)
+    // Confirm session is actually cleared — navigating to admin should redirect back to /auth
+    await page.goto('/')
+    await expect(page).toHaveURL(/\/auth/)
+  })
 })
 
 test.describe('auth — non-owner access', () => {
