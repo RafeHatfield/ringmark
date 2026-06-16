@@ -13,8 +13,10 @@ test.beforeAll(async ({ browser }) => {
   const page = await ctx.newPage()
 
   await page.goto('/objects/new?type=source')
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.waitForURL(/\/objects\/[^/]+$/)
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
 
   objectId = page.url().split('/objects/')[1]
   workshopId = (await page.locator('h1.font-mono').textContent())?.trim() ?? ''

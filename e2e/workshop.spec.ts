@@ -24,9 +24,12 @@ test.beforeAll(async ({ browser }) => {
 
   // ── Create source ──────────────────────────────────────────────────────────
   await page.goto('/objects/new?type=source')
-  // Type is pre-selected as 'source' from the URL param; just save
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.waitForURL(/\/objects\/[^/]+$/)
+  // Set up waitForURL BEFORE clicking so the listener is ready before navigation fires.
+  // The regex must NOT match /objects/new — use a UUID pattern.
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
 
   sourceId = page.url().split('/objects/')[1]
   sourceWorkshopId = (await page.locator('h1.font-mono').textContent())?.trim() ?? ''
@@ -36,8 +39,11 @@ test.beforeAll(async ({ browser }) => {
   await page.getByRole('link', { name: '+ Add Child' }).click()
   await page.waitForURL(/\/child\/new/)
   await page.locator('select').first().selectOption('log')
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.waitForURL(/\/objects\/[^/]+$/)
+  // Full UUID regex with $ anchor so /objects/${uuid}/child/new doesn't match prematurely
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
 
   childId = page.url().split('/objects/')[1]
   childWorkshopId = (await page.locator('h1.font-mono').textContent())?.trim() ?? ''
@@ -46,8 +52,10 @@ test.beforeAll(async ({ browser }) => {
   await page.getByRole('link', { name: '+ Add Child' }).click()
   await page.waitForURL(/\/child\/new/)
   await page.locator('select').first().selectOption('blank')
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.waitForURL(/\/objects\/[^/]+$/)
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
 
   grandchildId = page.url().split('/objects/')[1]
   grandchildWorkshopId = (await page.locator('h1.font-mono').textContent())?.trim() ?? ''
@@ -65,7 +73,8 @@ test('home page loads with Add Source and Add Object buttons', async ({ page }) 
 
 test('created source appears in the Recent list', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText(sourceWorkshopId)).toBeVisible()
+  // exact:true matches only the workshop_id span (not child IDs like RH1-1 which contain the prefix)
+  await expect(page.getByText(sourceWorkshopId, { exact: true })).toBeVisible()
 })
 
 // ── Source detail ────────────────────────────────────────────────────────────
@@ -84,7 +93,8 @@ test('source detail page shows the child in lineage', async ({ page }) => {
 
 test('child detail page shows parent in lineage section', async ({ page }) => {
   await page.goto(`/objects/${childId}`)
-  await expect(page.getByText(sourceWorkshopId)).toBeVisible()
+  // The parent appears as a link with exact text (child/grandchild IDs also contain the prefix)
+  await expect(page.getByRole('link', { name: sourceWorkshopId, exact: true })).toBeVisible()
   // "Parent" label should be visible in the lineage section
   await expect(page.getByText('Parent')).toBeVisible()
 })
@@ -126,6 +136,6 @@ test('editing type and status on the same record (transform, no new ID)', async 
   // ID must not have changed
   await expect(page.locator('h1.font-mono')).toHaveText(grandchildWorkshopId)
 
-  // Status chip should now reflect "Rough Turned"
-  await expect(page.getByText('Rough turned', { exact: false })).toBeVisible()
+  // Status is a <select> (StatusChanger) — check its value, not visible text
+  await expect(page.getByRole('combobox')).toHaveValue('rough_turned')
 })

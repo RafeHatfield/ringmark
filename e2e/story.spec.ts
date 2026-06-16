@@ -25,8 +25,10 @@ test.beforeAll(async ({ browser }) => {
   await page.goto('/objects/new?type=source')
   // Fill in private notes — used in the privacy assertion tests
   await page.getByPlaceholder('Where it came from, who gave it to you, etc.').fill(PRIVATE_NOTE)
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.waitForURL(/\/objects\/[^/]+$/)
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
 
   objectId = page.url().split('/objects/')[1]
 
@@ -87,14 +89,15 @@ test('publish makes the public story page accessible', async ({ page }) => {
 
 test('detail page shows Published badge after publishing', async ({ page }) => {
   await page.goto(`/objects/${objectId}`)
-  await expect(page.getByText('Published')).toBeVisible()
+  // Two "Published" elements on detail page (header badge + Public Story section) — take first
+  await expect(page.getByText('Published').first()).toBeVisible()
 })
 
 // ── Public page content ──────────────────────────────────────────────────────
 
 test('public page shows story title and text', async ({ browser }) => {
-  // Use a fresh (anonymous) context
-  const ctx = await browser.newContext()
+  // Use a truly anonymous context — storageState: undefined prevents auth bleed from test.use()
+  const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto(`/p/${publicSlug}`)
@@ -105,7 +108,7 @@ test('public page shows story title and text', async ({ browser }) => {
 })
 
 test('private_notes NEVER appear on the public page', async ({ browser }) => {
-  const ctx = await browser.newContext()
+  const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto(`/p/${publicSlug}`)

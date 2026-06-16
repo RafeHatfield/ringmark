@@ -10,8 +10,8 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 
-test.use({ storageState: 'e2e/.auth/user.json' })
-
+// No file-level test.use({ storageState }) — it bleeds into browser.newContext() calls
+// Each test that needs auth receives it explicitly via storageState on { page } fixture or context
 const AUTH_STATE = path.join(__dirname, '.auth/user.json')
 const PRIVATE_NOTE = 'PUBPAGE_PRIVATE_CANARY_MUST_NOT_LEAK'
 
@@ -27,8 +27,10 @@ test.beforeAll(async ({ browser }) => {
   // ── Create and publish an object ──────────────────────────────────────────
   await page.goto('/objects/new?type=source')
   await page.getByPlaceholder('Where it came from, who gave it to you, etc.').fill(PRIVATE_NOTE)
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.waitForURL(/\/objects\/[^/]+$/)
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
   publishedObjectId = page.url().split('/objects/')[1]
 
   // Write a story and publish
@@ -44,8 +46,10 @@ test.beforeAll(async ({ browser }) => {
 
   // ── Create an unpublished object ──────────────────────────────────────────
   await page.goto('/objects/new?type=source')
-  await page.getByRole('button', { name: 'Save' }).click()
-  await page.waitForURL(/\/objects\/[^/]+$/)
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
   unpublishedObjectId = page.url().split('/objects/')[1]
 
   // We need the public_slug even without publishing — grab it from the QR section
@@ -58,15 +62,18 @@ test.beforeAll(async ({ browser }) => {
 
 // ── Owner redirect ────────────────────────────────────────────────────────────
 
-test('logged-in owner visiting /p/[slug] is redirected to the admin page', async ({ page }) => {
+test('logged-in owner visiting /p/[slug] is redirected to the admin page', async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: AUTH_STATE })
+  const page = await ctx.newPage()
   await page.goto(`/p/${publishedSlug}`)
   await expect(page).toHaveURL(`/objects/${publishedObjectId}`)
+  await ctx.close()
 })
 
 // ── Anonymous access ──────────────────────────────────────────────────────────
 
 test('anonymous user sees the public story page for a published object', async ({ browser }) => {
-  const ctx = await browser.newContext()
+  const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto(`/p/${publishedSlug}`)
@@ -78,7 +85,7 @@ test('anonymous user sees the public story page for a published object', async (
 })
 
 test('anonymous user sees a placeholder for an unpublished object (not blank, not 404)', async ({ browser }) => {
-  const ctx = await browser.newContext()
+  const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto(`/p/${unpublishedSlug}`)
@@ -91,7 +98,7 @@ test('anonymous user sees a placeholder for an unpublished object (not blank, no
 })
 
 test('private_notes never appear on the anonymous public page', async ({ browser }) => {
-  const ctx = await browser.newContext()
+  const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto(`/p/${publishedSlug}`)
@@ -102,7 +109,7 @@ test('private_notes never appear on the anonymous public page', async ({ browser
 })
 
 test('unknown slug shows "could not be found" (not a crash, not a blank page)', async ({ browser }) => {
-  const ctx = await browser.newContext()
+  const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto('/p/slug-that-definitely-does-not-exist-xyz')
@@ -114,7 +121,8 @@ test('unknown slug shows "could not be found" (not a crash, not a blank page)', 
 // ── Admin routes inaccessible to anonymous users ──────────────────────────────
 
 test('anonymous user visiting admin detail page is redirected to /auth', async ({ browser }) => {
-  const ctx = await browser.newContext()
+  // Explicitly NO storageState — truly anonymous context
+  const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto(`/objects/${publishedObjectId}`)

@@ -23,6 +23,7 @@
     "clsx": "^2",
     "lucide-react": "^0.460",
     "next": "^15",
+    "qrcode": "^1.5.4",
     "react": "^19",
     "react-dom": "^19",
     "tailwind-merge": "^2"
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.0",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10",

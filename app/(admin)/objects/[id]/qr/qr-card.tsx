@@ -1,13 +1,8 @@
 'use client'
 
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
+import QRCode from 'qrcode'
 
-/**
- * QR Card — renders a printable card with a QR code and the public URL.
- * Uses the native HTML canvas API via a third-party-free QR generator.
- * For the POC, we use a URL-based QR service to avoid adding a dependency.
- * The QR image loads from api.qrserver.com (free, no API key required).
- */
 export default function QrCard({
   workshopId,
   publicUrl,
@@ -18,8 +13,16 @@ export default function QrCard({
   publicSlug: string
 }) {
   const cardRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(publicUrl)}&bgcolor=ffffff&color=000000&margin=1`
+  useEffect(() => {
+    if (!canvasRef.current) return
+    QRCode.toCanvas(canvasRef.current, publicUrl, {
+      width: 160,
+      margin: 1,
+      color: { dark: '#000000', light: '#ffffff' },
+    }).catch(console.error)
+  }, [publicUrl])
 
   function handlePrint() {
     window.print()
@@ -37,15 +40,8 @@ export default function QrCard({
         className="print:block border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center gap-4 max-w-xs mx-auto"
         id="qr-print-card"
       >
-        {/* QR code */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={qrSrc}
-          alt={`QR code for ${workshopId}`}
-          width={160}
-          height={160}
-          className="rounded"
-        />
+        {/* QR code — rendered locally via canvas, no external request */}
+        <canvas ref={canvasRef} width={160} height={160} className="rounded" />
 
         {/* Workshop ID */}
         <div className="text-center">

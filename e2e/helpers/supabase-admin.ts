@@ -3,8 +3,20 @@ import { createClient } from '@supabase/supabase-js'
 export const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? 'e2e@ringmark.local'
 export const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? 'RingmarkE2E2026!'
 
+function supabaseBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  // Strip any accidental path suffix (e.g. "/rest/v1/") — NEXT_PUBLIC_SUPABASE_URL
+  // must be just the project root: https://[ref].supabase.co
+  try {
+    const { protocol, host } = new URL(raw)
+    return `${protocol}//${host}`
+  } catch {
+    return raw
+  }
+}
+
 function adminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const url = supabaseBaseUrl()
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for E2E tests')

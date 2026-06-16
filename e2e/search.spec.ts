@@ -32,12 +32,14 @@ test.beforeAll(async ({ browser }) => {
 
 test('search by exact workshop ID shows that object', async ({ page }) => {
   await page.goto(`/?q=${encodeURIComponent(sourceWorkshopId)}`)
-  await expect(page.getByRole('link', { name: new RegExp(sourceWorkshopId) })).toBeVisible()
+  // Match by title since the source has a known title; the regex matches the link but not child IDs
+  await expect(page.getByRole('link', { name: /SearchTest Walnut/ })).toBeVisible()
 })
 
 test('search by child workshop ID shows only the child (not unrelated objects)', async ({ page }) => {
   await page.goto(`/?q=${encodeURIComponent(childWorkshopId)}`)
-  await expect(page.getByText(childWorkshopId)).toBeVisible()
+  // Use role to target the result link, not the heading which also contains the ID text
+  await expect(page.getByRole('link', { name: new RegExp(childWorkshopId) })).toBeVisible()
 })
 
 test('search by title keyword shows matching objects', async ({ page }) => {
