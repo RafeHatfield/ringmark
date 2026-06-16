@@ -62,9 +62,19 @@ test.describe('auth — already authenticated', () => {
     await page.goto('/')
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   })
+})
 
+// Separate describe with no storageState so the page fixture starts unauthenticated.
+// This prevents the sign-out from revoking the shared session in user.json that
+// other test files depend on.
+test.describe('auth — sign-out', () => {
   test('signing out redirects to /auth and clears the session', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/auth')
+    await page.fill('#email', TEST_EMAIL)
+    await page.fill('#password', TEST_PASSWORD)
+    await page.click('button[type="submit"]')
+    await page.waitForURL('/')
+
     await page.getByRole('button', { name: 'Sign out' }).click()
     await expect(page).toHaveURL(/\/auth/)
     // Confirm session is actually cleared — navigating to admin should redirect back to /auth
