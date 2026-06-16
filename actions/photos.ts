@@ -48,7 +48,14 @@ export async function createPhotoRecord(
 
   if (error || !created) return { error: error?.message ?? 'Failed to save photo.' }
 
+  const { data: obj } = await supabase
+    .from('wood_objects')
+    .select('public_slug')
+    .eq('id', objectId)
+    .single()
+
   revalidatePath(`/objects/${objectId}`)
+  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
   return { id: created.id }
 }
 
@@ -74,7 +81,14 @@ export async function deletePhoto(photoId: string): Promise<{ error?: string }> 
 
   if (error) return { error: error.message }
 
+  const { data: obj } = await supabase
+    .from('wood_objects')
+    .select('public_slug')
+    .eq('id', photo.object_id)
+    .single()
+
   revalidatePath(`/objects/${photo.object_id}`)
+  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
   return {}
 }
 
@@ -101,7 +115,14 @@ export async function updatePhotoCaption(
 
   if (error) return { error: error.message }
 
+  const { data: obj } = await supabase
+    .from('wood_objects')
+    .select('public_slug')
+    .eq('id', photo.object_id)
+    .single()
+
   revalidatePath(`/objects/${photo.object_id}`)
+  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
   return {}
 }
 
@@ -125,7 +146,14 @@ export async function togglePhotoVisibility(photoId: string): Promise<{ error?: 
 
   if (error) return { error: error.message }
 
+  const { data: obj } = await supabase
+    .from('wood_objects')
+    .select('public_slug')
+    .eq('id', photo.object_id)
+    .single()
+
   revalidatePath(`/objects/${photo.object_id}`)
+  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
   return {}
 }
 
@@ -162,6 +190,13 @@ export async function movePhoto(
     supabase.from('object_photos').update({ sort_order: a.sort_order }).eq('id', b.id),
   ])
 
+  const { data: obj } = await supabase
+    .from('wood_objects')
+    .select('public_slug')
+    .eq('id', photo.object_id)
+    .single()
+
   revalidatePath(`/objects/${photo.object_id}`)
+  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
   return {}
 }
