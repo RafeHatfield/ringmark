@@ -27,7 +27,7 @@ test.describe('auth — sign-in form', () => {
   test('sign-in form renders email and password fields', async ({ page }) => {
     await expect(page.locator('#email')).toBeVisible()
     await expect(page.locator('#password')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
   })
 
   test('wrong password shows an inline error (not a blank page)', async ({ page }) => {
