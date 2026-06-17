@@ -23,7 +23,8 @@ export async function middleware(request: NextRequest) {
   const isAdminRoute =
     pathname === '/workshop' ||
     pathname.startsWith('/objects') ||
-    pathname.startsWith('/settings')
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/profile')
   const isAuthRoute = pathname === '/login'
 
   if (isAdminRoute && !user) {

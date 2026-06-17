@@ -47,7 +47,7 @@ export default async function SettingsPage({
   return (
     <main className="max-w-2xl mx-auto px-4 pt-4 pb-16">
       <div className="flex items-center justify-between mb-5">
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/workshop" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </Link>
       </div>

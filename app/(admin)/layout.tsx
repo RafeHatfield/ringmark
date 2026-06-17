@@ -15,6 +15,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span className="text-xs text-muted-foreground truncate max-w-[120px]">
             {account.name}
           </span>
+          <Link href="/profile" className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors">
+            Profile
+          </Link>
           <Link href="/settings" className="text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors">
             Settings
           </Link>

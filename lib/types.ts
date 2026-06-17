@@ -33,6 +33,10 @@ export type Account = {
   owner_user_id: string
   name: string
   default_prefix: string
+  display_name: string | null
+  workshop_name: string | null
+  bio: string | null
+  avatar_storage_path: string | null
   created_at: string
   updated_at: string
 }

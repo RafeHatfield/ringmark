@@ -77,14 +77,27 @@ export default async function PublicStoryPage({
     }))
   }
 
-  // Fetch account name via service role (anon role can't read accounts)
+  // Fetch account profile via service role (anon role can't read accounts)
   const admin = createAdminClient()
   const { data: accountData } = await admin
     .from('accounts')
-    .select('name')
+    .select('name, display_name, workshop_name, avatar_storage_path')
     .eq('id', authCheck.account_id)
     .single()
-  const workshopName = accountData?.name ?? 'Ringmark'
+
+  const workshopName =
+    accountData?.workshop_name ||
+    accountData?.display_name ||
+    accountData?.name ||
+    'Ringmark'
+
+  let makerAvatarUrl: string | null = null
+  if (accountData?.avatar_storage_path) {
+    const { data } = admin.storage
+      .from('avatars')
+      .getPublicUrl(accountData.avatar_storage_path)
+    makerAvatarUrl = data.publicUrl
+  }
 
   const displayTitle = object.public_title || object.title || `/${object.public_slug}`
   const heroPhoto = photoUrls[0] ?? null
@@ -186,12 +199,17 @@ export default async function PublicStoryPage({
             {/* Maker */}
             <div className="reveal flex items-center gap-[14px]">
               <div className="w-[46px] h-[46px] rounded-full bg-sand flex items-center justify-center shrink-0 overflow-hidden" aria-hidden="true">
-                <svg width="30" height="30" viewBox="0 0 40 40" fill="none" stroke="#B0612F" strokeWidth="1.3">
-                  <circle cx="21" cy="20" r="3"/>
-                  <circle cx="20.5" cy="20" r="7"/>
-                  <circle cx="20" cy="20" r="11.5"/>
-                  <circle cx="19.4" cy="20" r="16" stroke="#D8A472"/>
-                </svg>
+                {makerAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={makerAvatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <svg width="30" height="30" viewBox="0 0 40 40" fill="none" stroke="#B0612F" strokeWidth="1.3">
+                    <circle cx="21" cy="20" r="3"/>
+                    <circle cx="20.5" cy="20" r="7"/>
+                    <circle cx="20" cy="20" r="11.5"/>
+                    <circle cx="19.4" cy="20" r="16" stroke="#D8A472"/>
+                  </svg>
+                )}
               </div>
               <div>
                 <p className="text-[11px] tracking-[0.1em] uppercase text-bark m-0 mb-[2px]">
