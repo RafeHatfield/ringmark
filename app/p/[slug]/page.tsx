@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -27,16 +26,19 @@ export default async function PublicStoryPage({
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Check ownership — owner sees an edit link but still views the public page
+  let isOwner = false
   if (user) {
     const { data: account } = await supabase
       .from('accounts')
       .select('id')
       .eq('id', authCheck.account_id)
       .single()
-    if (account) redirect(`/objects/${authCheck.id}`)
+    isOwner = !!account
   }
 
-  if (!authCheck.is_published) {
+  // Non-owners can't see unpublished pieces; owners can preview their own
+  if (!authCheck.is_published && !isOwner) {
     return <NotFound message="This piece's story hasn't been published yet." />
   }
 
@@ -47,7 +49,6 @@ export default async function PublicStoryPage({
       'id, public_slug, object_type, status, title, species, public_title, public_story, public_notes, public_care, is_published',
     )
     .eq('public_slug', slug)
-    .eq('is_published', true)
     .single()
 
   if (!object) {
@@ -113,6 +114,21 @@ export default async function PublicStoryPage({
       `}</style>
 
       <div className="min-h-screen bg-paper text-ink font-sans" style={{ WebkitFontSmoothing: 'antialiased' }}>
+        {isOwner && (
+          <div className="bg-sand border-b border-hairline">
+            <div className="max-w-[480px] mx-auto px-[22px] py-[10px] flex items-center justify-between">
+              <span className="text-[12px] text-bark">
+                {authCheck.is_published ? 'Published · public view' : 'Draft · not yet published'}
+              </span>
+              <Link
+                href={`/objects/${authCheck.id}/story`}
+                className="text-[12px] text-cedar hover:text-heartwood transition-colors"
+              >
+                Edit story →
+              </Link>
+            </div>
+          </div>
+        )}
         <main className="max-w-[480px] mx-auto px-[22px] pb-8">
           <article>
 

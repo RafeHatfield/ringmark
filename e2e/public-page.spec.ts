@@ -67,13 +67,16 @@ test.beforeAll(async ({ browser }) => {
   await ctx.close()
 })
 
-// ── Owner redirect ────────────────────────────────────────────────────────────
+// ── Owner view ────────────────────────────────────────────────────────────────
 
-test('logged-in owner visiting /p/[slug] is redirected to the admin page', async ({ browser }) => {
+test('logged-in owner visiting /p/[slug] sees the public view with an edit link', async ({ browser }) => {
   const ctx = await browser.newContext({ storageState: AUTH_STATE })
   const page = await ctx.newPage()
   await page.goto(`/p/${publishedSlug}`)
-  await expect(page).toHaveURL(`/objects/${publishedObjectId}`)
+  // Stays on the public page — no redirect
+  await expect(page).toHaveURL(`/p/${publishedSlug}`)
+  // Owner bar with edit link is visible
+  await expect(page.getByRole('link', { name: /Edit story/ })).toBeVisible()
   await ctx.close()
 })
 
