@@ -108,5 +108,6 @@ export async function deleteTestData(userId: string): Promise<void> {
     await client.from('wood_objects').delete().eq('account_id', account.id)
   }
 
+  // account_members and account_invites cascade-delete with the account
   await client.from('accounts').delete().eq('id', account.id)
 }

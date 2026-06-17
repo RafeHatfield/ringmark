@@ -126,6 +126,30 @@ export type ObjectPhotoInsert = {
 
 export type ObjectPhotoUpdate = Partial<ObjectPhotoInsert>
 
+export type AccountMember = {
+  account_id: string
+  user_id: string
+  joined_at: string
+}
+
+export type AccountInvite = {
+  id: string
+  account_id: string
+  created_by: string
+  expires_at: string
+  claimed_at: string | null
+  claimed_by: string | null
+}
+
+export type AccountInviteInsert = {
+  account_id: string
+  created_by: string
+  id?: string
+  expires_at?: string
+  claimed_at?: string | null
+  claimed_by?: string | null
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -133,6 +157,18 @@ export interface Database {
         Row: Account
         Insert: AccountInsert
         Update: AccountUpdate
+        Relationships: []
+      }
+      account_members: {
+        Row: AccountMember
+        Insert: Omit<AccountMember, 'joined_at'> & { joined_at?: string }
+        Update: Partial<AccountMember>
+        Relationships: []
+      }
+      account_invites: {
+        Row: AccountInvite
+        Insert: AccountInviteInsert
+        Update: Partial<AccountInviteInsert>
         Relationships: []
       }
       wood_objects: {
@@ -149,7 +185,10 @@ export interface Database {
       }
     }
     Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
+    Functions: {
+      create_account_for_user: { Args: Record<never, never>; Returns: string }
+      claim_account_invite: { Args: { invite_id: string }; Returns: { success?: boolean; error?: string; account_id?: string } }
+    }
     Enums: { [_ in never]: never }
   }
 }

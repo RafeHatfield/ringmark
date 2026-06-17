@@ -11,27 +11,34 @@ export async function getOrCreateAccount(): Promise<Account> {
 
   if (authError || !user) throw new Error('Not authenticated')
 
-  const { data: existing } = await supabase
-    .from('accounts')
-    .select('*')
-    .eq('owner_user_id', user.id)
+  // Look up via membership table — works for both owners and invited members
+  const { data: membership } = await supabase
+    .from('account_members')
+    .select('account_id')
+    .eq('user_id', user.id)
     .single()
 
-  if (existing) return existing as Account
-
-  const { data: created, error: insertError } = await supabase
-    .from('accounts')
-    .insert({
-      owner_user_id: user.id,
-      name: 'My Workshop',
-      default_prefix: 'RH',
-    })
-    .select()
-    .single()
-
-  if (insertError || !created) {
-    throw new Error(insertError?.message ?? 'Failed to create account')
+  if (membership) {
+    const { data: account } = await supabase
+      .from('accounts')
+      .select('*')
+      .eq('id', membership.account_id)
+      .single()
+    if (account) return account as Account
   }
 
-  return created as Account
+  // No membership found — create a new account and add as first member atomically
+  const { data: accountId, error: rpcError } = await supabase.rpc('create_account_for_user')
+  if (rpcError || !accountId) {
+    throw new Error(rpcError?.message ?? 'Failed to create account')
+  }
+
+  const { data: account } = await supabase
+    .from('accounts')
+    .select('*')
+    .eq('id', accountId)
+    .single()
+
+  if (!account) throw new Error('Account not found after creation')
+  return account as Account
 }
