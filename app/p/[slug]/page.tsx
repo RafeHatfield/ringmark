@@ -110,7 +110,7 @@ export default async function PublicStoryPage({
         <div className="mb-10 -mx-5 space-y-1">
           {photoUrls.map((p, i) =>
             p.url ? (
-              <figure key={i}>
+              <figure key={i} className="rounded-md overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.url} alt={p.caption ?? ''} className="w-full object-cover" />
                 {p.caption && (
