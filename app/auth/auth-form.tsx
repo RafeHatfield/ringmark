@@ -33,12 +33,13 @@ export default function AuthForm() {
 
   async function handleGoogleSignIn() {
     const supabase = createClient()
-    await supabase.auth.signInWithOAuth({
+    const { error: oauthErr } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
+    if (oauthErr) setError(oauthErr.message)
   }
 
   return (
