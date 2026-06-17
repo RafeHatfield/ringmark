@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { PhotoViewer } from './photo-viewer'
+import { PhotoStrip } from './photo-viewer'
 
 
 export default async function PublicStoryPage({
@@ -144,8 +144,23 @@ export default async function PublicStoryPage({
               Before it was yours
             </p>
 
-            {/* Hero + strip (interactive — client component) */}
-            <PhotoViewer photos={photoUrls} displayTitle={displayTitle} />
+            {/* Hero */}
+            {photoUrls[0]?.url ? (
+              <div className="reveal aspect-[4/3] rounded-[14px] overflow-hidden bg-sand">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photoUrls[0].url}
+                  alt={photoUrls[0].caption ?? displayTitle}
+                  className="w-full h-full object-cover block"
+                />
+              </div>
+            ) : (
+              <div className="reveal aspect-[4/3] rounded-[14px] bg-sand flex items-center justify-center">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#B0612F" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/>
+                </svg>
+              </div>
+            )}
 
             {/* Title block */}
             <header className="reveal">
@@ -211,6 +226,10 @@ export default async function PublicStoryPage({
               </div>
             </div>
 
+            {/* Photo strip — client component for lightbox */}
+            {photoUrls.length > 1 && (
+              <PhotoStrip photos={photoUrls} />
+            )}
 
             {/* Care */}
             {object.public_care && (
