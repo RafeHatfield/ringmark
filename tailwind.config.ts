@@ -19,6 +19,15 @@ const config: Config = {
         fraunces: ['var(--font-fraunces)', 'Georgia', 'serif'],
       },
       colors: {
+        // Public page palette
+        paper: '#FBF6EE',
+        ink: '#2B2620',
+        bark: '#6E6456',
+        cedar: '#B0612F',
+        heartwood: '#7A3F1D',
+        sand: '#F1E7D5',
+        hairline: '#E7DAC4',
+        // shadcn tokens
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
