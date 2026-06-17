@@ -47,12 +47,16 @@ jobs:
 
       - name: Write .env.local
         run: |
-          STATUS=$(supabase status)
+          STATUS=$(supabase status --output json)
+          echo "=== supabase status (redacted) ==="
+          echo "$STATUS" | jq 'keys'
           {
-            echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$STATUS" | jq -r '.API_URL')"
-            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$STATUS" | jq -r '.ANON_KEY')"
-            echo "SUPABASE_SERVICE_ROLE_KEY=$(echo "$STATUS" | jq -r '.SERVICE_ROLE_KEY')"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$(echo "$STATUS" | jq -r '.api_url // .API_URL')"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$(echo "$STATUS" | jq -r '.anon_key // .ANON_KEY')"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(echo "$STATUS" | jq -r '.service_role_key // .SERVICE_ROLE_KEY')"
           } > .env.local
+          echo "=== .env.local keys (values redacted) ==="
+          cut -d= -f1 .env.local
 
       - name: Run unit + security tests
         run: npm test
