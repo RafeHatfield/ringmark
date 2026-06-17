@@ -42,18 +42,12 @@ export default async function HomePage({
         <SearchInput defaultValue={q} />
       </div>
 
-      <div className="flex gap-3 mb-8">
-        <Link
-          href="/objects/new?type=source"
-          className="flex-1 flex items-center justify-center px-4 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          + Add Source
-        </Link>
+      <div className="mb-8">
         <Link
           href="/objects/new"
-          className="flex-1 flex items-center justify-center px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors"
+          className="inline-flex items-center justify-center px-4 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
         >
-          + Add Object
+          + Add
         </Link>
       </div>
 
@@ -65,17 +59,17 @@ export default async function HomePage({
         </div>
       ) : (
         <div>
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <h2 className="text-xs text-muted-foreground tracking-wider mb-2">
             {query ? `Results for "${query}"` : 'Recent'}
           </h2>
-          <ul className="divide-y divide-border rounded-md border">
+          <ul className="divide-y divide-border">
             {objects.map((obj) => {
               const typeLabel = OBJECT_TYPES.find((t) => t.value === obj.object_type)?.label ?? obj.object_type
               return (
                 <li key={obj.id}>
                   <Link
                     href={`/objects/${obj.id}`}
-                    className="flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors gap-3"
+                    className="flex items-center justify-between py-3 hover:opacity-70 transition-opacity gap-3"
                   >
                     <div className="min-w-0">
                       <span className="font-mono text-sm font-medium">{obj.workshop_id}</span>

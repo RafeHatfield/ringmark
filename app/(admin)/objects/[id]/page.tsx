@@ -88,18 +88,18 @@ export default async function ObjectDetailPage({
       </div>
 
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-mono font-bold tracking-tight mb-1">{object.workshop_id}</h1>
+      <div className="mb-8">
+        <h1 className="text-4xl font-mono font-bold tracking-tight mb-1">{object.workshop_id}</h1>
         {object.title && (
-          <p className="text-muted-foreground text-sm mb-3">{object.title}</p>
+          <p className="text-muted-foreground text-sm mt-1">{object.title}</p>
         )}
-        <div className="flex items-center gap-2 flex-wrap mt-2">
-          <span className="text-xs px-2 py-0.5 rounded-full border bg-secondary text-secondary-foreground font-medium">
+        <div className="flex items-center gap-2 flex-wrap mt-3">
+          <span className="text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
             {typeLabel}
           </span>
           <StatusChanger objectId={id} status={object.status} />
           {object.is_published && (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
               Published
             </span>
           )}
@@ -131,7 +131,7 @@ export default async function ObjectDetailPage({
       {/* Lineage */}
       {(parent || (children && children.length > 0)) && (
         <section className="mb-6">
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
             Lineage
           </h2>
           <div className="border rounded-md divide-y divide-border">
@@ -177,7 +177,7 @@ export default async function ObjectDetailPage({
 
       {/* Photos */}
       <section className="mb-6">
-        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
           Photos
         </h2>
         <PhotoSection objectId={id} accountId={account.id} initialPhotos={photos} />
@@ -185,7 +185,7 @@ export default async function ObjectDetailPage({
 
       {/* Details */}
       <section className="mb-6">
-        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
           Details
         </h2>
         {hasDetails ? (
@@ -251,53 +251,47 @@ export default async function ObjectDetailPage({
         )}
       </section>
 
-      {/* Public story */}
-      <section className="mb-6">
-        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          Public Story
-        </h2>
-        <div className="border rounded-md px-4 py-4 flex items-center justify-between gap-4">
+      {/* Public story + QR */}
+      <section className="mb-12 border-t pt-6">
+        <h2 className="text-xs text-muted-foreground tracking-wider mb-4">Public</h2>
+        <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <p className="text-sm font-medium">
+            <p className="text-sm">
               {object.is_published ? 'Published' : 'Not published'}
             </p>
-            {object.is_published && (
+            {object.is_published ? (
               <a
                 href={`/p/${object.public_slug}`}
-                className="text-xs text-muted-foreground underline mt-0.5 block"
+                className="font-mono text-muted-foreground text-xs mt-0.5 underline block"
               >
                 /p/{object.public_slug}
               </a>
+            ) : (
+              <p className="font-mono text-muted-foreground text-xs mt-0.5">
+                /p/{object.public_slug}
+              </p>
             )}
           </div>
-          <Link
-            href={`/objects/${id}/story`}
-            className="shrink-0 text-sm px-3 py-1.5 border border-input rounded-md hover:bg-accent transition-colors"
-          >
-            {object.public_story ? 'Edit Story' : 'Add Story'}
-          </Link>
-        </div>
-      </section>
-
-      {/* QR */}
-      <section className="mb-12">
-        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          QR
-        </h2>
-        <div className="border rounded-md px-4 py-4 flex items-center justify-between gap-4">
-          <p className="text-sm font-mono text-muted-foreground">/p/{object.public_slug}</p>
-          <Link
-            href={`/objects/${id}/qr`}
-            className="shrink-0 text-sm px-3 py-1.5 border border-input rounded-md hover:bg-accent transition-colors"
-          >
-            QR Card
-          </Link>
+          <div className="flex gap-2 shrink-0">
+            <Link
+              href={`/objects/${id}/story`}
+              className="text-sm px-3 py-1.5 border border-input rounded-md hover:bg-accent transition-colors"
+            >
+              {object.public_story ? 'Edit Story' : 'Add Story'}
+            </Link>
+            <Link
+              href={`/objects/${id}/qr`}
+              className="text-sm px-3 py-1.5 border border-input rounded-md hover:bg-accent transition-colors"
+            >
+              QR
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* Danger zone */}
       <section className="border-t pt-8">
-        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
           Danger Zone
         </h2>
         <p className="text-xs text-muted-foreground mb-4">

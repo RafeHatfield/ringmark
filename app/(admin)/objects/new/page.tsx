@@ -22,9 +22,7 @@ export default async function NewObjectPage({
 
   return (
     <main className="max-w-2xl mx-auto px-4 pt-6 pb-16">
-      <h1 className="text-lg font-semibold mb-6">
-        {defaultType === 'source' ? 'Add Source' : 'Add Object'}
-      </h1>
+      <h1 className="text-lg font-semibold mb-6">Add Object</h1>
       <NewObjectForm suggestedId={suggestedId} defaultType={defaultType} />
     </main>
   )

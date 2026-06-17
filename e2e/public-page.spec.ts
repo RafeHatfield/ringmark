@@ -29,7 +29,7 @@ test.beforeAll(async ({ browser }) => {
 
   // ── Create and publish an object ──────────────────────────────────────────
   await page.goto('/objects/new?type=source')
-  await page.getByPlaceholder('Where it came from, who gave it to you, etc.').fill(PRIVATE_NOTE)
+  await page.getByPlaceholder('Where did this wood come from? Who gave it to you?').fill(PRIVATE_NOTE)
   await Promise.all([
     page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
     page.getByRole('button', { name: 'Save' }).click(),

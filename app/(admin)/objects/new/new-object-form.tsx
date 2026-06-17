@@ -29,6 +29,9 @@ export default function NewObjectForm({
   const [privateNotes, setPrivateNotes] = useState('')
   const [formError, setFormError] = useState('')
 
+  const isSource = type === 'source'
+  const hasType = type !== ''
+
   async function handleBlurId() {
     const val = workshopId.trim()
     if (!val) return
@@ -70,23 +73,6 @@ export default function NewObjectForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="block text-sm font-medium mb-1.5">Workshop ID</label>
-        <input
-          value={workshopId}
-          onChange={handleIdChange}
-          onBlur={handleBlurId}
-          className={`${fieldClass} font-mono`}
-          placeholder="RH1"
-          required
-          maxLength={20}
-        />
-        {idError
-          ? <p className="mt-1 text-xs text-destructive">{idError}</p>
-          : <p className="mt-1 text-xs text-muted-foreground">Auto-generated — edit if you prefer a different ID.</p>
-        }
-      </div>
-
-      <div>
         <label className="block text-sm font-medium mb-1.5">
           Type <span className="text-destructive">*</span>
         </label>
@@ -98,89 +84,112 @@ export default function NewObjectForm({
         </select>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Status <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
-        </label>
-        <select value={status} onChange={e => setStatus(e.target.value as ObjectStatus)} className={fieldClass}>
-          <option value="">None</option>
-          {OBJECT_STATUSES.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-      </div>
+      {hasType && (
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Workshop ID</label>
+            <input
+              value={workshopId}
+              onChange={handleIdChange}
+              onBlur={handleBlurId}
+              className={`${fieldClass} font-mono`}
+              placeholder="RH1"
+              required
+              maxLength={20}
+            />
+            {idError
+              ? <p className="mt-1 text-xs text-destructive">{idError}</p>
+              : <p className="mt-1 text-xs text-muted-foreground">Auto-generated — edit if you prefer a different ID.</p>
+            }
+          </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Title <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
-        </label>
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          className={fieldClass}
-          placeholder="e.g. Backyard maple — Lynn Valley"
-          maxLength={200}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Species <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
-        </label>
-        <div className="flex gap-2">
-          <input
-            value={species}
-            onChange={e => setSpecies(e.target.value)}
-            className={fieldClass}
-            placeholder="e.g. Hard maple"
-            maxLength={100}
-          />
-          {species && (
-            <select
-              value={speciesConf}
-              onChange={e => setSpeciesConf(e.target.value as SpeciesConfidence)}
-              className="shrink-0 border border-input rounded-md px-2 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              <option value="">Confidence</option>
-              {SPECIES_CONFIDENCE_LEVELS.map(c => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
+          {!isSource && (
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                Status <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+              </label>
+              <select value={status} onChange={e => setStatus(e.target.value as ObjectStatus)} className={fieldClass}>
+                <option value="">None</option>
+                {OBJECT_STATUSES.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
           )}
-        </div>
-      </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Private notes <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
-        </label>
-        <textarea
-          value={privateNotes}
-          onChange={e => setPrivateNotes(e.target.value)}
-          className={`${fieldClass} min-h-[80px] resize-y`}
-          placeholder="Where it came from, who gave it to you, etc."
-        />
-      </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">
+              Title <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+            </label>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              className={fieldClass}
+              placeholder="e.g. Backyard maple — Lynn Valley"
+              maxLength={200}
+            />
+          </div>
 
-      {formError && <p className="text-sm text-destructive">{formError}</p>}
+          <div>
+            <label className="block text-sm font-medium mb-1.5">
+              Species <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={species}
+                onChange={e => setSpecies(e.target.value)}
+                className={fieldClass}
+                placeholder="e.g. Hard maple"
+                maxLength={100}
+              />
+              {species && (
+                <select
+                  value={speciesConf}
+                  onChange={e => setSpeciesConf(e.target.value as SpeciesConfidence)}
+                  className="shrink-0 border border-input rounded-md px-2 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">Confidence</option>
+                  {SPECIES_CONFIDENCE_LEVELS.map(c => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
 
-      <div className="flex gap-3 pt-2">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          disabled={isPending}
-          className="px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isPending || !!idError}
-          className="flex-1 bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-        >
-          {isPending ? 'Saving…' : 'Save'}
-        </button>
-      </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">
+              Private notes <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+            </label>
+            <textarea
+              value={privateNotes}
+              onChange={e => setPrivateNotes(e.target.value)}
+              className={`${fieldClass} min-h-[80px] resize-y`}
+              placeholder={isSource ? 'Where did this wood come from? Who gave it to you?' : 'Any notes for yourself (never shown publicly).'}
+            />
+          </div>
+
+          {formError && <p className="text-sm text-destructive">{formError}</p>}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              disabled={isPending}
+              className="px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending || !!idError}
+              className="flex-1 bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {isPending ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </>
+      )}
     </form>
   )
 }

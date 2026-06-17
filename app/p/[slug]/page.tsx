@@ -95,23 +95,26 @@ export default async function PublicStoryPage({
   const displayTitle = object.public_title || object.title || `/${object.public_slug}`
 
   return (
-    <main className="max-w-xl mx-auto px-4 pt-8 pb-16">
+    <main className="max-w-lg mx-auto px-5 pt-12 pb-20">
       {/* Header */}
-      <h1 className="text-2xl font-bold mb-1">{displayTitle}</h1>
+      <h1 className="font-fraunces text-3xl font-semibold leading-tight mb-1">
+        {displayTitle}
+      </h1>
       {object.species && (
-        <p className="text-sm text-muted-foreground mb-4">{object.species}</p>
+        <p className="text-sm text-muted-foreground mt-1 mb-8">{object.species}</p>
       )}
+      {!object.species && <div className="mb-8" />}
 
-      {/* Photos */}
+      {/* Photos — full bleed on mobile */}
       {photoUrls.length > 0 && (
-        <div className="mb-6 space-y-2">
+        <div className="mb-10 -mx-5 space-y-1">
           {photoUrls.map((p, i) =>
             p.url ? (
-              <figure key={i} className="rounded-md overflow-hidden">
+              <figure key={i}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.url} alt={p.caption ?? ''} className="w-full object-cover" />
                 {p.caption && (
-                  <figcaption className="px-2 py-1.5 text-xs text-muted-foreground">
+                  <figcaption className="px-5 pt-2 text-xs text-muted-foreground">
                     {p.caption}
                   </figcaption>
                 )}
@@ -123,33 +126,35 @@ export default async function PublicStoryPage({
 
       {/* Story */}
       {object.public_story && (
-        <section className="mb-6">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{object.public_story}</p>
+        <section className="mb-8">
+          <p className="text-base leading-8 text-foreground/90 whitespace-pre-wrap">
+            {object.public_story}
+          </p>
         </section>
       )}
 
       {/* Notes */}
       {object.public_notes && (
-        <section className="mb-6 p-4 border rounded-md bg-secondary/20">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{object.public_notes}</p>
+        <section className="mb-8 border-l-2 border-border pl-4">
+          <p className="text-sm leading-7 text-muted-foreground whitespace-pre-wrap">
+            {object.public_notes}
+          </p>
         </section>
       )}
 
       {/* Care */}
       {object.public_care && (
-        <section className="mb-8">
-          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-            Care
-          </h2>
-          <p className="text-sm leading-relaxed">{object.public_care}</p>
+        <section className="mb-10">
+          <h2 className="text-xs text-muted-foreground tracking-wider mb-3">Care</h2>
+          <p className="text-sm leading-7">{object.public_care}</p>
         </section>
       )}
 
       {/* Footer */}
-      <footer className="border-t pt-4">
-        <p className="text-xs text-muted-foreground">
+      <footer className="border-t pt-5">
+        <p className="text-xs text-muted-foreground/60">
           Tracked with{' '}
-          <Link href="/" className="underline">
+          <Link href="/" className="underline underline-offset-2">
             Ringmark
           </Link>
         </p>

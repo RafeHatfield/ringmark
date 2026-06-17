@@ -65,10 +65,11 @@ test.beforeAll(async ({ browser }) => {
 
 // ── Home page ────────────────────────────────────────────────────────────────
 
-test('home page loads with Add Source and Add Object buttons', async ({ page }) => {
+test('home page loads with a single Add button', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('link', { name: '+ Add Source' })).toBeVisible()
-  await expect(page.getByRole('link', { name: '+ Add Object' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '+ Add' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '+ Add Source' })).not.toBeVisible()
+  await expect(page.getByRole('link', { name: '+ Add Object' })).not.toBeVisible()
 })
 
 test('created source appears in the Recent list', async ({ page }) => {
