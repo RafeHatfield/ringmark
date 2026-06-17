@@ -76,7 +76,7 @@ export default async function PublicStoryPage({
     .select('id, storage_path, caption, sort_order')
     .eq('object_id', object.id)
     .eq('is_public', true)
-    .order('sort_order')
+    .order('sort_order', { ascending: false })
 
   let photoUrls: { caption: string | null; url: string }[] = []
   if (photos && photos.length > 0) {
