@@ -6,6 +6,20 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Supabase OAuth sometimes ignores redirectTo and sends ?code= to the Site URL root.
+  // Intercept it here and forward to /auth/callback so the exchange can happen.
+  const code = request.nextUrl.searchParams.get('code')
+  if (code && pathname !== '/auth/callback') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/callback'
+    url.search = `?code=${encodeURIComponent(code)}`
+    const response = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      response.cookies.set(cookie.name, cookie.value)
+    })
+    return response
+  }
+
   const isAdminRoute = pathname === '/' || pathname.startsWith('/objects')
   const isAuthRoute = pathname === '/auth'
 
