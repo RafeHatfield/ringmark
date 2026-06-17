@@ -16,6 +16,7 @@ export async function saveProfile(formData: FormData) {
   const display_name = (formData.get('display_name') as string)?.trim() || null
   const workshop_name = (formData.get('workshop_name') as string)?.trim() || null
   const bio = (formData.get('bio') as string)?.trim() || null
+  const website_url = (formData.get('website_url') as string)?.trim() || null
   const avatar_storage_path = formData.get('avatar_storage_path') as string | null
 
   await supabase
@@ -24,6 +25,7 @@ export async function saveProfile(formData: FormData) {
       display_name,
       workshop_name,
       bio,
+      website_url,
       ...(avatar_storage_path !== null && { avatar_storage_path: avatar_storage_path || null }),
     })
     .eq('id', account.id)

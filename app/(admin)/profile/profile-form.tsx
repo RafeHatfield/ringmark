@@ -9,6 +9,7 @@ interface Props {
   initialDisplayName: string
   initialWorkshopName: string
   initialBio: string
+  initialWebsiteUrl: string
   initialAvatarUrl: string | null
   initialAvatarPath: string | null
 }
@@ -18,6 +19,7 @@ export function ProfileForm({
   initialDisplayName,
   initialWorkshopName,
   initialBio,
+  initialWebsiteUrl,
   initialAvatarUrl,
   initialAvatarPath,
 }: Props) {
@@ -156,6 +158,24 @@ export function ProfileForm({
           placeholder="A little about you and your work…"
           className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring resize-none"
         />
+      </div>
+
+      {/* Website */}
+      <div className="space-y-1.5">
+        <label htmlFor="website_url" className="block text-sm font-medium">
+          Website
+        </label>
+        <input
+          id="website_url"
+          name="website_url"
+          type="url"
+          defaultValue={initialWebsiteUrl}
+          placeholder="https://yourworkshop.com"
+          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        <p className="text-xs text-muted-foreground">
+          Optional. Links your workshop name on public piece pages.
+        </p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { PhotoViewer } from './photo-viewer'
 
-const MAX_STRIP = 3
 
 export default async function PublicStoryPage({
   params,
@@ -81,7 +81,7 @@ export default async function PublicStoryPage({
   const admin = createAdminClient()
   const { data: accountData } = await admin
     .from('accounts')
-    .select('name, display_name, workshop_name, avatar_storage_path')
+    .select('name, display_name, workshop_name, avatar_storage_path, website_url')
     .eq('id', authCheck.account_id)
     .single()
 
@@ -99,15 +99,9 @@ export default async function PublicStoryPage({
     makerAvatarUrl = data.publicUrl
   }
 
+  const makerWebsiteUrl = accountData?.website_url ?? null
+
   const displayTitle = object.public_title || object.title || `/${object.public_slug}`
-  const heroPhoto = photoUrls[0] ?? null
-  const stripPhotos = photoUrls.slice(1)
-  const visibleStrip =
-    stripPhotos.length <= MAX_STRIP
-      ? stripPhotos
-      : stripPhotos.slice(0, MAX_STRIP - 1)
-  const overflowCount =
-    stripPhotos.length > MAX_STRIP ? stripPhotos.length - (MAX_STRIP - 1) : 0
 
   return (
     <>
@@ -150,23 +144,8 @@ export default async function PublicStoryPage({
               Before it was yours
             </p>
 
-            {/* Hero */}
-            {heroPhoto?.url ? (
-              <div className="reveal aspect-[4/3] rounded-[14px] overflow-hidden bg-sand">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={heroPhoto.url}
-                  alt={heroPhoto.caption ?? displayTitle}
-                  className="w-full h-full object-cover block"
-                />
-              </div>
-            ) : (
-              <div className="reveal aspect-[4/3] rounded-[14px] bg-sand flex items-center justify-center">
-                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#B0612F" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/>
-                </svg>
-              </div>
-            )}
+            {/* Hero + strip (interactive — client component) */}
+            <PhotoViewer photos={photoUrls} displayTitle={displayTitle} />
 
             {/* Title block */}
             <header className="reveal">
@@ -215,33 +194,23 @@ export default async function PublicStoryPage({
                 <p className="text-[11px] tracking-[0.1em] uppercase text-bark m-0 mb-[2px]">
                   From the workshop of
                 </p>
-                <p className="font-fraunces font-medium text-[17px] text-ink m-0">
-                  {workshopName}
-                </p>
+                {makerWebsiteUrl ? (
+                  <a
+                    href={makerWebsiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-fraunces font-medium text-[17px] text-ink hover:text-cedar transition-colors no-underline"
+                  >
+                    {workshopName}
+                  </a>
+                ) : (
+                  <p className="font-fraunces font-medium text-[17px] text-ink m-0">
+                    {workshopName}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Photo strip */}
-            {stripPhotos.length > 0 && (
-              <>
-                <hr className="reveal h-px bg-hairline border-0 my-7" />
-                <div className="reveal grid grid-cols-3 gap-2">
-                  {visibleStrip.map((p, i) =>
-                    p.url ? (
-                      <div key={i} className="aspect-square rounded-[9px] bg-sand overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={p.url} alt={p.caption ?? ''} className="w-full h-full object-cover" />
-                      </div>
-                    ) : null,
-                  )}
-                  {overflowCount > 0 && (
-                    <div className="aspect-square rounded-[9px] bg-sand flex items-center justify-center">
-                      <span className="text-[14px] text-heartwood font-medium">+{overflowCount}</span>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
 
             {/* Care */}
             {object.public_care && (

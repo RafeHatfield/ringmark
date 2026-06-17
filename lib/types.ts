@@ -37,6 +37,7 @@ export type Account = {
   workshop_name: string | null
   bio: string | null
   avatar_storage_path: string | null
+  website_url: string | null
   created_at: string
   updated_at: string
 }

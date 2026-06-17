@@ -30,6 +30,7 @@ export default async function ProfilePage() {
         initialDisplayName={account.display_name ?? ''}
         initialWorkshopName={account.workshop_name ?? ''}
         initialBio={account.bio ?? ''}
+        initialWebsiteUrl={account.website_url ?? ''}
         initialAvatarUrl={avatarUrl}
         initialAvatarPath={account.avatar_storage_path}
       />
