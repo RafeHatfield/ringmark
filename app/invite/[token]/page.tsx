@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { claimInvite } from '@/actions/members'
@@ -40,9 +41,9 @@ export default async function InvitePage({
     <main className="min-h-screen flex items-center justify-center px-4">
       <div className="max-w-sm w-full text-center space-y-3">
         <p className="text-sm text-muted-foreground">{message}</p>
-        <a href="/" className="text-sm underline underline-offset-2">
+        <Link href="/" className="text-sm underline underline-offset-2">
           Go to Ringmark
-        </a>
+        </Link>
       </div>
     </main>
   )
