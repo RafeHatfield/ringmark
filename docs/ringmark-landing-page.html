@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#FBF6EE">
+<title>Ringmark — keep the story with the piece</title>
+<meta name="description" content="Ringmark keeps a handmade piece's story with the piece itself. A maker records where it came from; a small code carries that story to whoever holds it next.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBF6EE;
+    --ink:#2B2620;
+    --bark:#6E6456;
+    --cedar:#B0612F;
+    --heartwood:#7A3F1D;
+    --sand:#F1E7D5;
+    --hairline:#E7DAC4;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:600px;margin:0 auto;padding:0 24px;}
+
+  /* --- header --- */
+  .top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:20px 0;
+  }
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--serif);font-weight:500;font-size:19px;color:var(--ink);text-decoration:none;}
+  .brand svg{display:block;}
+  .login{
+    font-size:14px;color:var(--bark);text-decoration:none;
+    border:1px solid var(--hairline);border-radius:8px;padding:7px 15px;
+    transition:color .15s, border-color .15s;
+  }
+  .login:hover{color:var(--heartwood);border-color:var(--cedar);}
+  .login:focus-visible{outline:2px solid var(--cedar);outline-offset:2px;}
+
+  /* --- hero --- */
+  .hero{text-align:center;padding:38px 0 16px;}
+  .mark{margin:0 auto 26px;display:block;}
+  .hero h1{
+    font-family:var(--serif);font-optical-sizing:auto;font-weight:500;
+    font-size:clamp(32px, 9vw, 44px);line-height:1.1;letter-spacing:-0.015em;
+    margin:0 0 18px;
+  }
+  .hero .lede{
+    font-size:17px;line-height:1.65;color:var(--bark);
+    max-width:38ch;margin:0 auto 26px;
+  }
+  .actions{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    background:var(--cedar);color:var(--paper);text-decoration:none;
+    font-size:15px;font-weight:500;padding:13px 26px;border-radius:10px;
+    transition:background .15s;
+  }
+  .btn:hover{background:var(--heartwood);}
+  .btn:focus-visible{outline:2px solid var(--heartwood);outline-offset:3px;}
+  .example{font-size:14px;color:var(--cedar);text-decoration:none;border-radius:6px;}
+  .example:hover{color:var(--heartwood);text-decoration:underline;}
+  .example:focus-visible{outline:2px solid var(--cedar);outline-offset:3px;}
+
+  /* --- how it works (the journey) --- */
+  .how{padding:46px 0 8px;}
+  .how-eyebrow{
+    text-align:center;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;
+    color:var(--cedar);margin:0 0 22px;
+  }
+  .journey-lead{
+    font-family:var(--serif);font-optical-sizing:auto;font-weight:400;
+    font-size:19px;line-height:1.6;color:#433B30;text-align:center;
+    max-width:42ch;margin:0 auto 34px;
+  }
+  .chain{max-width:380px;margin:0 auto;}
+  .node{display:flex;gap:16px;position:relative;padding-bottom:22px;}
+  .node:last-child{padding-bottom:0;}
+  .node:not(:last-child)::before{
+    content:"";position:absolute;left:21px;top:46px;bottom:-2px;width:2px;background:var(--hairline);
+  }
+  .node .dot{
+    width:44px;height:44px;border-radius:12px;background:var(--sand);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    position:relative;z-index:1;color:var(--cedar);
+  }
+  .node.finish .dot{background:var(--cedar);color:var(--paper);}
+  .node .body{padding-top:5px;}
+  .node .body h3{font-family:var(--serif);font-weight:500;font-size:17px;margin:0 0 2px;color:var(--ink);}
+  .node.finish .body h3{color:var(--heartwood);}
+  .node .body p{margin:0;font-size:14px;line-height:1.5;color:var(--bark);}
+  .chain .reveal:nth-child(1){animation-delay:.04s;}
+  .chain .reveal:nth-child(2){animation-delay:.12s;}
+  .chain .reveal:nth-child(3){animation-delay:.20s;}
+  .chain .reveal:nth-child(4){animation-delay:.28s;}
+  .chain .reveal:nth-child(5){animation-delay:.36s;}
+  .chain .reveal:nth-child(6){animation-delay:.44s;}
+
+  /* --- philosophy --- */
+  .why{
+    text-align:center;padding:50px 8px;
+  }
+  .why p{
+    font-family:var(--serif);font-optical-sizing:auto;font-weight:400;
+    font-size:22px;line-height:1.5;color:#433B30;margin:0 0 16px;
+  }
+  .why .small{font-family:var(--sans);font-size:15px;line-height:1.6;color:var(--bark);margin:0;}
+
+  /* --- maker invite --- */
+  .invite{
+    background:var(--sand);border-radius:14px;padding:28px 26px;text-align:center;
+    margin-bottom:8px;
+  }
+  .invite h2{font-family:var(--serif);font-weight:500;font-size:22px;margin:0 0 10px;}
+  .invite p{font-size:15px;line-height:1.6;color:var(--bark);margin:0 auto 20px;max-width:40ch;}
+  .invite .line{font-size:14px;color:var(--bark);margin:16px 0 0;}
+  .invite .line a{color:var(--cedar);text-decoration:none;}
+  .invite .line a:hover{color:var(--heartwood);text-decoration:underline;}
+
+  /* --- footer --- */
+  .foot{text-align:center;padding:36px 0 40px;color:#9C9080;}
+  .foot .glyph{display:inline-flex;align-items:center;gap:8px;font-size:13px;letter-spacing:0.04em;color:#9C9080;}
+  .foot .tag{font-size:12px;margin-top:10px;color:#B0A491;}
+
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+  /* --- motion --- */
+  @keyframes rise{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+  @keyframes ringIn{from{opacity:0;transform:scale(.55);}to{opacity:1;transform:scale(1);}}
+  .reveal{animation:rise .7s cubic-bezier(.2,.6,.2,1) both;}
+  .reveal.d1{animation-delay:.08s;} .reveal.d2{animation-delay:.16s;} .reveal.d3{animation-delay:.24s;}
+  .mark circle{transform-box:fill-box;transform-origin:center;animation:ringIn .9s cubic-bezier(.2,.7,.2,1) both;}
+  .mark circle:nth-child(1){animation-delay:.10s;}
+  .mark circle:nth-child(2){animation-delay:.22s;}
+  .mark circle:nth-child(3){animation-delay:.34s;}
+  .mark circle:nth-child(4){animation-delay:.46s;}
+  @media (prefers-reduced-motion:reduce){
+    .reveal,.mark circle{animation:none;}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header class="top">
+      <a class="brand" href="/">
+        <svg width="22" height="22" viewBox="0 0 40 40" fill="none" stroke="var(--cedar)" stroke-width="1.6" aria-hidden="true">
+          <circle cx="20.5" cy="20" r="4"/><circle cx="20" cy="20" r="10"/><circle cx="19.5" cy="20" r="16"/>
+        </svg>
+        Ringmark
+      </a>
+      <a class="login" href="/login">Log in</a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <svg class="mark" width="96" height="96" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+          <circle cx="52" cy="50" r="6"  stroke="#7A3F1D" stroke-width="2"/>
+          <circle cx="51" cy="50" r="15" stroke="#B0612F" stroke-width="2"/>
+          <circle cx="50" cy="50" r="26" stroke="#C98A56" stroke-width="1.8"/>
+          <circle cx="49" cy="50" r="38" stroke="#DDB58A" stroke-width="1.6"/>
+        </svg>
+        <h1 class="reveal">Keep the story with the piece.</h1>
+        <p class="lede reveal d1">Ringmark keeps a handmade object's story with the object itself. You photograph a piece as it's made — from raw log to finished work — and a small code carries that whole journey to whoever holds it next.</p>
+        <div class="actions reveal d2">
+          <a class="btn" href="/login">Log in to your workshop</a>
+          <a class="example" href="https://www.ringmark.org/p/7M7Msxsg">See an example piece →</a>
+        </div>
+      </section>
+
+      <section class="how">
+        <p class="how-eyebrow">How it works</p>
+        <p class="journey-lead">You don't sit down and write a history. You take a quick photo at each step — and each one links to the step before, so the finished piece traces all the way back to the log.</p>
+        <div class="chain">
+          <div class="node reveal">
+            <span class="dot">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            </span>
+            <div class="body"><h3>Fresh logs</h3><p>Snap a photo. The story starts here.</p></div>
+          </div>
+          <div class="node reveal">
+            <span class="dot">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            </span>
+            <div class="body"><h3>Cut to boards</h3><p>Linked to the logs they came from.</p></div>
+          </div>
+          <div class="node reveal">
+            <span class="dot">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            </span>
+            <div class="body"><h3>Bowl blank</h3><p>Cut from a board.</p></div>
+          </div>
+          <div class="node reveal">
+            <span class="dot">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            </span>
+            <div class="body"><h3>Rough-turned</h3><p>The shape appears.</p></div>
+          </div>
+          <div class="node reveal">
+            <span class="dot">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            </span>
+            <div class="body"><h3>Finished piece</h3><p>Ready to find its person.</p></div>
+          </div>
+          <div class="node finish reveal">
+            <span class="dot">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14.5" y="14.5" width="2.5" height="2.5" fill="currentColor" stroke="none"/><rect x="18.5" y="18.5" width="2.5" height="2.5" fill="currentColor" stroke="none"/></svg>
+            </span>
+            <div class="body"><h3>Add the story, print the code</h3><p>When you're ready — that's it.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="why">
+        <p>Handmade things outlast the moment they're made. The tree they came from, the hands that shaped them, the reason they exist — that's worth keeping too.</p>
+        <p class="small">Because the things we keep longest are the ones whose story we know.</p>
+      </section>
+
+      <section class="invite">
+        <h2>Make something worth keeping?</h2>
+        <p>Ringmark is a small, hand-built project for now. If you make things and want to give your work its story, I'd love to hear from you.</p>
+        <a class="btn" href="/login">Log in</a>
+        <p class="line">Not set up yet? <a href="mailto:hello@ringmark.org">Get in touch</a>.</p>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span class="glyph">
+        <svg width="15" height="15" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <circle cx="20.5" cy="20" r="4"/><circle cx="20" cy="20" r="10"/><circle cx="19.5" cy="20" r="16"/>
+        </svg>
+        Ringmark
+      </span>
+      <p class="tag">The story stays with the piece.</p>
+    </footer>
+
+  </div>
+</body>
+</html>

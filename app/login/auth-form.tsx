@@ -11,7 +11,7 @@ export default function AuthForm() {
   const [error, setError] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const next = searchParams.get('next') ?? '/'
+  const next = searchParams.get('next') ?? '/workshop'
   const oauthError = searchParams.get('error')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

@@ -8,7 +8,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b px-4 py-3 flex items-center justify-between sticky top-0 bg-background z-10">
-        <Link href="/" className="font-medium text-sm tracking-widest uppercase text-foreground/80 hover:text-foreground transition-colors">
+        <Link href="/workshop" className="font-medium text-sm tracking-widest uppercase text-foreground/80 hover:text-foreground transition-colors">
           Ringmark
         </Link>
         <div className="flex items-center gap-4">

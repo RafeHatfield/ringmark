@@ -16,7 +16,7 @@ export function DeleteObjectButton({ objectId }: { objectId: string }) {
         setConfirming(false)
         return
       }
-      router.push('/')
+      router.push('/workshop')
     })
   }
 

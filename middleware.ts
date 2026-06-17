@@ -20,12 +20,15 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  const isAdminRoute = pathname === '/' || pathname.startsWith('/objects')
-  const isAuthRoute = pathname === '/auth'
+  const isAdminRoute =
+    pathname === '/workshop' ||
+    pathname.startsWith('/objects') ||
+    pathname.startsWith('/settings')
+  const isAuthRoute = pathname === '/login'
 
   if (isAdminRoute && !user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/auth'
+    url.pathname = '/login'
     const response = NextResponse.redirect(url)
     // Copy refreshed session cookies so the auth page sees the correct state
     supabaseResponse.cookies.getAll().forEach((cookie) => {
@@ -36,7 +39,7 @@ export async function middleware(request: NextRequest) {
 
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/workshop'
     const response = NextResponse.redirect(url)
     // Copy refreshed session cookies so the destination page sees the session
     supabaseResponse.cookies.getAll().forEach((cookie) => {

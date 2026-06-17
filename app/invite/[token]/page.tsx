@@ -16,14 +16,14 @@ export default async function InvitePage({
 
   // Not signed in — send to auth with the invite URL as the return destination
   if (!user) {
-    redirect(`/auth?next=/invite/${token}`)
+    redirect(`/login?next=/invite/${token}`)
   }
 
   // Signed in — attempt to claim immediately
   const result = await claimInvite(token)
 
   if (result.success) {
-    redirect('/')
+    redirect('/workshop')
   }
 
   const errorMessages: Record<string, string> = {

@@ -66,14 +66,14 @@ test.beforeAll(async ({ browser }) => {
 // ── Home page ────────────────────────────────────────────────────────────────
 
 test('home page loads with a single Add button', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workshop')
   await expect(page.getByRole('link', { name: '+ Add' })).toBeVisible()
   await expect(page.getByRole('link', { name: '+ Add Source' })).not.toBeVisible()
   await expect(page.getByRole('link', { name: '+ Add Object' })).not.toBeVisible()
 })
 
 test('created source appears in the Recent list', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workshop')
   // exact:true matches only the workshop_id span (not child IDs like RH1-1 which contain the prefix)
   await expect(page.getByText(sourceWorkshopId, { exact: true })).toBeVisible()
 })

@@ -11,7 +11,7 @@ export function SearchInput({ defaultValue }: { defaultValue?: string }) {
     if (timer.current) clearTimeout(timer.current)
     const val = e.target.value.trim()
     timer.current = setTimeout(() => {
-      router.push(val ? `/?q=${encodeURIComponent(val)}` : '/')
+      router.push(val ? `/workshop?q=${encodeURIComponent(val)}` : '/workshop')
     }, 300)
   }
 

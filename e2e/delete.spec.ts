@@ -67,8 +67,8 @@ test('confirming deletion removes the object and redirects home', async ({ page 
   await page.getByRole('button', { name: 'Yes, delete permanently' }).click()
 
   // Should land on home
-  await page.waitForURL('/')
-  await expect(page).toHaveURL('/')
+  await page.waitForURL('/workshop')
+  await expect(page).toHaveURL('/workshop')
 })
 
 test('deleted object no longer appears in search results', async ({ page }) => {

@@ -8,20 +8,26 @@ const OTHER_AUTH_STATE = path.join(__dirname, '.auth/other-user.json')
 // Auth tests deliberately do NOT use saved storage state — they test the login flow itself
 
 test.describe('auth — unauthenticated access', () => {
-  test('GET / redirects to /auth', async ({ page }) => {
-    await page.goto('/')
-    await expect(page).toHaveURL(/\/auth/)
+  test('GET /workshop redirects to /login', async ({ page }) => {
+    await page.goto('/workshop')
+    await expect(page).toHaveURL(/\/login/)
   })
 
-  test('GET /objects/any-id redirects to /auth', async ({ page }) => {
+  test('GET /objects/any-id redirects to /login', async ({ page }) => {
     await page.goto('/objects/00000000-0000-0000-0000-000000000000')
-    await expect(page).toHaveURL(/\/auth/)
+    await expect(page).toHaveURL(/\/login/)
+  })
+
+  test('GET / shows the public landing page (no redirect)', async ({ page }) => {
+    await page.goto('/')
+    await expect(page).toHaveURL('/')
+    await expect(page.getByRole('heading', { name: /Keep the story/ })).toBeVisible()
   })
 })
 
 test.describe('auth — sign-in form', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/auth')
+    await page.goto('/login')
   })
 
   test('sign-in form renders email and password fields', async ({ page }) => {
@@ -35,17 +41,17 @@ test.describe('auth — sign-in form', () => {
     await page.fill('#password', 'definitely-wrong-password')
     await page.click('button[type="submit"]')
 
-    // Should stay on /auth and show an error — not redirect anywhere
-    await expect(page).toHaveURL(/\/auth/)
+    // Should stay on /login and show an error — not redirect anywhere
+    await expect(page).toHaveURL(/\/login/)
     await expect(page.locator('.text-destructive')).toBeVisible()
   })
 
-  test('correct credentials redirect to home', async ({ page }) => {
+  test('correct credentials redirect to /workshop', async ({ page }) => {
     await page.fill('#email', TEST_EMAIL)
     await page.fill('#password', TEST_PASSWORD)
     await page.click('button[type="submit"]')
 
-    await page.waitForURL('/')
+    await page.waitForURL('/workshop')
     await expect(page.getByText('Ringmark')).toBeVisible()
   })
 })
@@ -53,13 +59,13 @@ test.describe('auth — sign-in form', () => {
 test.describe('auth — already authenticated', () => {
   test.use({ storageState: 'e2e/.auth/user.json' })
 
-  test('visiting /auth while logged in redirects to /', async ({ page }) => {
-    await page.goto('/auth')
-    await expect(page).toHaveURL('/')
+  test('visiting /login while logged in redirects to /workshop', async ({ page }) => {
+    await page.goto('/login')
+    await expect(page).toHaveURL('/workshop')
   })
 
   test('sign out button is visible in the admin header', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/workshop')
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   })
 })
@@ -68,18 +74,18 @@ test.describe('auth — already authenticated', () => {
 // This prevents the sign-out from revoking the shared session in user.json that
 // other test files depend on.
 test.describe('auth — sign-out', () => {
-  test('signing out redirects to /auth and clears the session', async ({ page }) => {
-    await page.goto('/auth')
+  test('signing out redirects to /login and clears the session', async ({ page }) => {
+    await page.goto('/login')
     await page.fill('#email', TEST_EMAIL)
     await page.fill('#password', TEST_PASSWORD)
     await page.click('button[type="submit"]')
-    await page.waitForURL('/')
+    await page.waitForURL('/workshop')
 
     await page.getByRole('button', { name: 'Sign out' }).click()
-    await expect(page).toHaveURL(/\/auth/)
-    // Confirm session is actually cleared — navigating to admin should redirect back to /auth
-    await page.goto('/')
-    await expect(page).toHaveURL(/\/auth/)
+    await expect(page).toHaveURL(/\/login/)
+    // Confirm session is actually cleared — navigating to admin should redirect back to /login
+    await page.goto('/workshop')
+    await expect(page).toHaveURL(/\/login/)
   })
 })
 
@@ -105,11 +111,11 @@ test.describe('auth — non-owner access', () => {
 
     await page.goto(`/objects/${firstUserObjectId}`)
 
-    // Must land on the not-found page — not the object, and not redirected to /auth.
+    // Must land on the not-found page — not the object, and not redirected to /login.
     // We assert on content rather than HTTP status because Next.js dev mode returns
     // 200 for notFound() boundaries; the content check is what actually matters.
     await expect(page.getByText('Object not found')).toBeVisible()
-    await expect(page).not.toHaveURL(/\/auth/)
+    await expect(page).not.toHaveURL(/\/login/)
 
     await ctx.close()
   })

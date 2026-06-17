@@ -149,13 +149,13 @@ test('unknown slug shows "could not be found" (not a crash, not a blank page)', 
 
 // ── Admin routes inaccessible to anonymous users ──────────────────────────────
 
-test('anonymous user visiting admin detail page is redirected to /auth', async ({ browser }) => {
+test('anonymous user visiting admin detail page is redirected to /login', async ({ browser }) => {
   // Explicitly NO storageState — truly anonymous context
   const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
   await page.goto(`/objects/${publishedObjectId}`)
-  await expect(page).toHaveURL(/\/auth/)
+  await expect(page).toHaveURL(/\/login/)
 
   await ctx.close()
 })

@@ -31,28 +31,28 @@ test.beforeAll(async ({ browser }) => {
 })
 
 test('search by exact workshop ID shows that object', async ({ page }) => {
-  await page.goto(`/?q=${encodeURIComponent(sourceWorkshopId)}`)
+  await page.goto(`/workshop?q=${encodeURIComponent(sourceWorkshopId)}`)
   // Match by title since the source has a known title; the regex matches the link but not child IDs
   await expect(page.getByRole('link', { name: /SearchTest Walnut/ })).toBeVisible()
 })
 
 test('search by child workshop ID shows only the child (not unrelated objects)', async ({ page }) => {
-  await page.goto(`/?q=${encodeURIComponent(childWorkshopId)}`)
+  await page.goto(`/workshop?q=${encodeURIComponent(childWorkshopId)}`)
   // Use role to target the result link, not the heading which also contains the ID text
   await expect(page.getByRole('link', { name: new RegExp(childWorkshopId) })).toBeVisible()
 })
 
 test('search by title keyword shows matching objects', async ({ page }) => {
-  await page.goto('/?q=SearchTest')
+  await page.goto('/workshop?q=SearchTest')
   await expect(page.getByText(sourceWorkshopId)).toBeVisible()
 })
 
 test('search with no query shows Recent list', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/workshop')
   await expect(page.getByText('Recent')).toBeVisible()
 })
 
 test('search with no results shows an informative empty state', async ({ page }) => {
-  await page.goto('/?q=ZZZNORESULTSXYZ')
+  await page.goto('/workshop?q=ZZZNORESULTSXYZ')
   await expect(page.getByText('No results', { exact: false })).toBeVisible()
 })

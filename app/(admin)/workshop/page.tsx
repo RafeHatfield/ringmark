@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { OBJECT_TYPES } from '@/lib/constants'
 import { SearchInput } from '@/components/search-input'
 
-export default async function HomePage({
+export default async function WorkshopPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string }>
