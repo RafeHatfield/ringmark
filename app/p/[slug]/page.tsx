@@ -1,8 +1,87 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { PhotoStrip } from './photo-viewer'
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
+
+  const admin = createAdminClient()
+  const { data: object } = await admin
+    .from('wood_objects')
+    .select('public_title, title, public_story, public_slug, account_id, is_published')
+    .eq('public_slug', slug)
+    .eq('is_published', true)
+    .single()
+
+  if (!object) {
+    return { title: 'Ringmark' }
+  }
+
+  const { data: account } = await admin
+    .from('accounts')
+    .select('workshop_name, display_name, name')
+    .eq('id', object.account_id)
+    .single()
+
+  const title = object.public_title || object.title || slug
+  const workshopName = account?.workshop_name || account?.display_name || account?.name || 'Ringmark'
+  const description = object.public_story
+    ? object.public_story.slice(0, 160).replace(/\s+/g, ' ').trim()
+    : `A handmade piece from the workshop of ${workshopName}.`
+
+  // Get hero photo for OG image — fetch object ID first via admin client
+  const { data: objectRow } = await admin
+    .from('wood_objects')
+    .select('id')
+    .eq('public_slug', slug)
+    .single()
+
+  let ogImage: string | undefined
+  if (objectRow?.id) {
+    const { data: photos } = await admin
+      .from('object_photos')
+      .select('storage_path')
+      .eq('object_id', objectRow.id)
+      .eq('is_public', true)
+      .order('sort_order', { ascending: false })
+      .limit(1)
+
+    if (photos?.[0]?.storage_path) {
+      const { data: signed } = await admin.storage
+        .from('object-photos')
+        .createSignedUrls([photos[0].storage_path], 3600)
+      ogImage = signed?.[0]?.signedUrl ?? undefined
+    }
+  }
+
+  const url = `${appUrl}/p/${slug}`
+
+  return {
+    title: `${title} — Ringmark`,
+    description,
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: 'Ringmark',
+      type: 'article',
+      ...(ogImage ? { images: [{ url: ogImage, width: 1200, height: 900, alt: title }] } : {}),
+    },
+    twitter: {
+      card: ogImage ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
+  }
+}
 
 export default async function PublicStoryPage({
   params,
@@ -81,7 +160,7 @@ export default async function PublicStoryPage({
   const admin = createAdminClient()
   const { data: accountData } = await admin
     .from('accounts')
-    .select('name, display_name, workshop_name, avatar_storage_path, website_url')
+    .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url')
     .eq('id', authCheck.account_id)
     .single()
 
@@ -225,6 +304,13 @@ export default async function PublicStoryPage({
                 )}
               </div>
             </div>
+
+            {/* Maker bio */}
+            {accountData?.bio && (
+              <p className="reveal text-[14px] leading-[1.7] text-bark mt-4 mb-0">
+                {accountData.bio}
+              </p>
+            )}
 
             {/* Photo strip — client component for lightbox */}
             {photoUrls.length > 1 && (
