@@ -3,18 +3,18 @@
  *
  * The public page has two critical security properties:
  *
- *   1. OWNER REDIRECT: a logged-in user who owns the object must be redirected
- *      to the admin view (/objects/[id]) — even if the object is unpublished.
- *      If this fires AFTER the is_published check, owners viewing their own
- *      unpublished work would hit the "not published yet" wall instead of admin.
+ *   1. OWNER DETECTION: a logged-in user who owns the object sees the public
+ *      page with an edit bar (isOwner = true) rather than being redirected.
+ *      This detection MUST happen BEFORE the is_published gate so that owners
+ *      can preview their own unpublished drafts.
  *
  *   2. PUBLISHED GATE: non-owners must only see the full public page when
  *      is_published is true. Unpublished objects must show a holding message.
  *
  * These tests parse app/p/[slug]/page.tsx as source text and assert that:
  *   - The server-side auth check (auth.getUser) is present
- *   - The owner comparison and redirect exist
- *   - The OWNER REDIRECT appears BEFORE the is_published gate (ordering invariant)
+ *   - The owner detection (isOwner flag) and edit bar exist
+ *   - The OWNER DETECTION appears BEFORE the is_published gate (ordering invariant)
  *   - The public data SELECT only runs after all gates pass
  *   - Slugs not found in the DB return a not-found response (no crash, no redirect)
  *
@@ -38,10 +38,10 @@ describe('auth routing — /p/[slug]', () => {
     )
   })
 
-  it('redirect is imported from next/navigation (server redirect, not client)', () => {
+  it('owner detection sets isOwner flag server-side (not a client-side check)', () => {
     assert.ok(
-      src.includes("from 'next/navigation'"),
-      "redirect must come from 'next/navigation' — client-side redirects would expose data before navigating",
+      src.includes('isOwner'),
+      'must set isOwner flag server-side based on account membership — never trust client state for ownership',
     )
   })
 
@@ -60,26 +60,26 @@ describe('auth routing — /p/[slug]', () => {
     )
   })
 
-  it('owner is redirected to the admin object detail page', () => {
+  it('owner sees an edit bar (not a redirect) — shows public view with edit link', () => {
     assert.ok(
-      src.includes('redirect(`/objects/'),
-      'owner must be redirected to /objects/[id] (admin view)',
+      src.includes('isOwner') && src.includes('/story'),
+      'owner must see the public page with an edit bar linking to the story editor',
     )
   })
 
-  it('ORDERING: owner redirect occurs BEFORE the is_published gate', () => {
-    // Critical invariant: if an owner visits /p/slug for their OWN unpublished object,
-    // they must reach the admin page — not the "hasn't been published yet" wall.
-    // Reversing this order would mean owners can't navigate to their drafts via QR.
-    const ownerRedirectIdx = src.indexOf('redirect(`/objects/')
+  it('ORDERING: owner detection occurs BEFORE the is_published gate', () => {
+    // Critical invariant: owners must be able to preview their own unpublished drafts.
+    // If the is_published gate fired first, owners would hit the "not published yet"
+    // wall instead of seeing their draft with the edit bar.
+    const isOwnerSetIdx = src.indexOf('isOwner = ')
     const publishedGateIdx = src.indexOf('!authCheck.is_published')
 
-    assert.ok(ownerRedirectIdx !== -1, 'owner redirect must exist')
+    assert.ok(isOwnerSetIdx !== -1, 'isOwner flag must be set server-side')
     assert.ok(publishedGateIdx !== -1, 'is_published gate must exist')
     assert.ok(
-      ownerRedirectIdx < publishedGateIdx,
-      'owner redirect MUST appear before the is_published check — ' +
-      'owners of unpublished objects should reach admin, not the "not published" message',
+      isOwnerSetIdx < publishedGateIdx,
+      'isOwner detection MUST appear before the is_published check — ' +
+      'owners of unpublished objects must be able to preview their own drafts',
     )
   })
 
@@ -102,17 +102,18 @@ describe('auth routing — /p/[slug]', () => {
 
   it('ORDERING: public data SELECT only runs after both auth gates pass', () => {
     // The full public data fetch (the expensive query) must come AFTER:
-    //   1. the owner redirect (owners never reach the public render path)
+    //   1. the owner detection (isOwner is set before the published gate)
     //   2. the is_published gate (unpublished objects never reach the render path)
     const publicSelectMarker = "'id, public_slug, object_type"
-    const ownerRedirectIdx = src.indexOf('redirect(`/objects/')
+    const isOwnerSetIdx = src.indexOf('isOwner = ')
     const publishedGateIdx = src.indexOf('!authCheck.is_published')
     const publicSelectIdx = src.indexOf(publicSelectMarker)
 
+    assert.ok(isOwnerSetIdx !== -1, 'isOwner flag must be set server-side')
     assert.ok(publicSelectIdx !== -1, 'public data SELECT must exist')
     assert.ok(
-      ownerRedirectIdx < publicSelectIdx,
-      'public data SELECT must come AFTER the owner redirect check',
+      isOwnerSetIdx < publicSelectIdx,
+      'public data SELECT must come AFTER the owner detection check',
     )
     assert.ok(
       publishedGateIdx < publicSelectIdx,
