@@ -60,7 +60,7 @@ test.beforeAll(async ({ browser }) => {
   unpublishedObjectId = page.url().split('/objects/')[1]
 
   // We need the public_slug even without publishing — grab it from the QR section
-  const qrText = await page.locator('p.font-mono.text-muted-foreground').textContent()
+  const qrText = await page.locator('p.font-mono.text-bark').textContent()
   // format: "/p/{slug}"
   unpublishedSlug = qrText?.replace('/p/', '').trim() ?? ''
 
