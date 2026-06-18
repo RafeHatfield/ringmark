@@ -76,12 +76,12 @@ export default async function ObjectDetailPage({
     <main className="max-w-2xl mx-auto px-4 pt-4 pb-16">
       {/* Nav */}
       <div className="flex items-center justify-between mb-5">
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/" className="text-sm text-bark hover:text-ink">
           ← Back
         </Link>
         <Link
           href={`/objects/${id}/edit`}
-          className="text-sm font-medium px-3 py-1.5 border border-input rounded-md hover:bg-accent transition-colors"
+          className="text-sm font-medium px-3 py-1.5 border border-hairline rounded-md hover:bg-sand transition-colors"
         >
           Edit
         </Link>
@@ -91,10 +91,10 @@ export default async function ObjectDetailPage({
       <div className="mb-8">
         <h1 className="text-4xl font-mono font-bold tracking-tight mb-1">{object.workshop_id}</h1>
         {object.title && (
-          <p className="text-muted-foreground text-sm mt-1">{object.title}</p>
+          <p className="text-bark text-sm mt-1">{object.title}</p>
         )}
         <div className="flex items-center gap-2 flex-wrap mt-3">
-          <span className="text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+          <span className="text-xs px-2 py-0.5 rounded-full border text-bark">
             {typeLabel}
           </span>
           <StatusChanger objectId={id} status={object.status} />
@@ -110,19 +110,19 @@ export default async function ObjectDetailPage({
       <div className="flex gap-2 flex-wrap mb-8">
         <Link
           href={`/objects/${id}/child/new`}
-          className="px-3 py-1.5 border border-input rounded-md text-sm hover:bg-accent transition-colors"
+          className="px-3 py-1.5 border border-hairline rounded-md text-sm hover:bg-sand transition-colors"
         >
           + Add Child
         </Link>
         <Link
           href={`/objects/${id}/story`}
-          className="px-3 py-1.5 border border-input rounded-md text-sm hover:bg-accent transition-colors"
+          className="px-3 py-1.5 border border-hairline rounded-md text-sm hover:bg-sand transition-colors"
         >
           Edit Story
         </Link>
         <Link
           href={`/objects/${id}/qr`}
-          className="px-3 py-1.5 border border-input rounded-md text-sm hover:bg-accent transition-colors"
+          className="px-3 py-1.5 border border-hairline rounded-md text-sm hover:bg-sand transition-colors"
         >
           QR Card
         </Link>
@@ -131,27 +131,27 @@ export default async function ObjectDetailPage({
       {/* Lineage */}
       {(parent || (children && children.length > 0)) && (
         <section className="mb-6">
-          <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
+          <h2 className="text-xs text-bark tracking-wider mb-3">
             Lineage
           </h2>
-          <div className="border rounded-md divide-y divide-border">
+          <div className="border border-hairline rounded-md divide-y divide-hairline">
             {parent && (
               <div className="px-4 py-3">
-                <p className="text-xs text-muted-foreground mb-0.5">Parent</p>
+                <p className="text-xs text-bark mb-0.5">Parent</p>
                 <Link
                   href={`/objects/${parent.id}`}
                   className="font-mono text-sm font-medium hover:underline"
                 >
                   {parent.workshop_id}
                 </Link>
-                <span className="text-xs text-muted-foreground ml-2">
+                <span className="text-xs text-bark ml-2">
                   {OBJECT_TYPES.find((t) => t.value === parent.object_type)?.label}
                 </span>
               </div>
             )}
             {children && children.length > 0 && (
               <div className="px-4 py-3">
-                <p className="text-xs text-muted-foreground mb-2">
+                <p className="text-xs text-bark mb-2">
                   Children ({children.length})
                 </p>
                 <ul className="space-y-1.5">
@@ -163,7 +163,7 @@ export default async function ObjectDetailPage({
                       >
                         {child.workshop_id}
                       </Link>
-                      <span className="text-xs text-muted-foreground ml-2">
+                      <span className="text-xs text-bark ml-2">
                         {OBJECT_TYPES.find((t) => t.value === child.object_type)?.label}
                       </span>
                     </li>
@@ -177,7 +177,7 @@ export default async function ObjectDetailPage({
 
       {/* Photos */}
       <section className="mb-6">
-        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
+        <h2 className="text-xs text-bark tracking-wider mb-3">
           Photos
         </h2>
         <PhotoSection objectId={id} accountId={account.id} initialPhotos={photos} />
@@ -185,18 +185,18 @@ export default async function ObjectDetailPage({
 
       {/* Details */}
       <section className="mb-6">
-        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
+        <h2 className="text-xs text-bark tracking-wider mb-3">
           Details
         </h2>
         {hasDetails ? (
-          <dl className="border rounded-md divide-y divide-border">
+          <dl className="border border-hairline rounded-md divide-y divide-hairline">
             {object.species && (
               <div className="px-4 py-3 flex justify-between gap-4">
-                <dt className="text-sm text-muted-foreground shrink-0">Species</dt>
+                <dt className="text-sm text-bark shrink-0">Species</dt>
                 <dd className="text-sm text-right">
                   {object.species}
                   {object.species_confidence && (
-                    <span className="text-muted-foreground ml-1 text-xs capitalize">
+                    <span className="text-bark ml-1 text-xs capitalize">
                       ({object.species_confidence})
                     </span>
                   )}
@@ -205,28 +205,28 @@ export default async function ObjectDetailPage({
             )}
             {object.dimensions_text && (
               <div className="px-4 py-3 flex justify-between gap-4">
-                <dt className="text-sm text-muted-foreground shrink-0">Dimensions</dt>
+                <dt className="text-sm text-bark shrink-0">Dimensions</dt>
                 <dd className="text-sm text-right">{object.dimensions_text}</dd>
               </div>
             )}
             {object.finish && (
               <div className="px-4 py-3 flex justify-between gap-4">
-                <dt className="text-sm text-muted-foreground shrink-0">Finish</dt>
+                <dt className="text-sm text-bark shrink-0">Finish</dt>
                 <dd className="text-sm text-right">{object.finish}</dd>
               </div>
             )}
             {object.location_text && (
               <div className="px-4 py-3 flex justify-between gap-4">
-                <dt className="text-sm text-muted-foreground shrink-0">
+                <dt className="text-sm text-bark shrink-0">
                   Location{' '}
-                  <span className="text-xs text-muted-foreground font-normal">(private)</span>
+                  <span className="text-xs text-bark font-normal">(private)</span>
                 </dt>
                 <dd className="text-sm text-right">{object.location_text}</dd>
               </div>
             )}
             {object.lineage_confidence && (
               <div className="px-4 py-3 flex justify-between gap-4">
-                <dt className="text-sm text-muted-foreground shrink-0">Lineage</dt>
+                <dt className="text-sm text-bark shrink-0">Lineage</dt>
                 <dd className="text-sm text-right capitalize">
                   {object.lineage_confidence.replace('_', ' ')}
                 </dd>
@@ -234,8 +234,8 @@ export default async function ObjectDetailPage({
             )}
           </dl>
         ) : (
-          <div className="border rounded-md px-4 py-4">
-            <p className="text-sm text-muted-foreground">
+          <div className="border border-hairline rounded-md px-4 py-4">
+            <p className="text-sm text-bark">
               No details yet.{' '}
               <Link href={`/objects/${id}/edit`} className="underline">
                 Add details →
@@ -244,16 +244,16 @@ export default async function ObjectDetailPage({
           </div>
         )}
         {object.private_notes && (
-          <div className="mt-3 border rounded-md px-4 py-3">
-            <p className="text-xs text-muted-foreground mb-1">Private notes</p>
+          <div className="mt-3 border border-hairline rounded-md px-4 py-3">
+            <p className="text-xs text-bark mb-1">Private notes</p>
             <p className="text-sm whitespace-pre-wrap">{object.private_notes}</p>
           </div>
         )}
       </section>
 
       {/* Public story + QR */}
-      <section className="mb-12 border-t pt-6">
-        <h2 className="text-xs text-muted-foreground tracking-wider mb-4">Public</h2>
+      <section className="mb-12 border-t border-hairline pt-6">
+        <h2 className="text-xs text-bark tracking-wider mb-4">Public</h2>
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <p className="text-sm">
@@ -262,12 +262,12 @@ export default async function ObjectDetailPage({
             {object.is_published ? (
               <a
                 href={`/p/${object.public_slug}`}
-                className="font-mono text-muted-foreground text-xs mt-0.5 underline block"
+                className="font-mono text-bark text-xs mt-0.5 underline block"
               >
                 /p/{object.public_slug}
               </a>
             ) : (
-              <p className="font-mono text-muted-foreground text-xs mt-0.5">
+              <p className="font-mono text-bark text-xs mt-0.5">
                 /p/{object.public_slug}
               </p>
             )}
@@ -275,13 +275,13 @@ export default async function ObjectDetailPage({
           <div className="flex gap-2 shrink-0">
             <Link
               href={`/objects/${id}/story`}
-              className="text-sm px-3 py-1.5 border border-input rounded-md hover:bg-accent transition-colors"
+              className="text-sm px-3 py-1.5 border border-hairline rounded-md hover:bg-sand transition-colors"
             >
               {object.public_story ? 'Edit Story' : 'Add Story'}
             </Link>
             <Link
               href={`/objects/${id}/qr`}
-              className="text-sm px-3 py-1.5 border border-input rounded-md hover:bg-accent transition-colors"
+              className="text-sm px-3 py-1.5 border border-hairline rounded-md hover:bg-sand transition-colors"
             >
               QR
             </Link>
@@ -290,11 +290,11 @@ export default async function ObjectDetailPage({
       </section>
 
       {/* Danger zone */}
-      <section className="border-t pt-8">
-        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">
+      <section className="border-t border-hairline pt-8">
+        <h2 className="text-xs text-bark tracking-wider mb-3">
           Danger Zone
         </h2>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-xs text-bark mb-4">
           Permanently deletes this object, all its photos, and removes it from any lineage trees.
           Children are not deleted but become roots.
         </p>

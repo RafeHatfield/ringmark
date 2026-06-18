@@ -26,7 +26,7 @@ export default async function EditStoryPage({
   return (
     <main className="max-w-2xl mx-auto px-4 pt-6 pb-16">
       <h1 className="text-lg font-semibold mb-1">Public Story</h1>
-      <p className="text-sm text-muted-foreground mb-6">{object.workshop_id}</p>
+      <p className="text-sm text-bark mb-6">{object.workshop_id}</p>
       <StoryEditor
         objectId={id}
         publicSlug={object.public_slug}

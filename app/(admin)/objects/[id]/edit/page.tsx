@@ -34,7 +34,7 @@ export default async function EditObjectPage({
   return (
     <main className="max-w-2xl mx-auto px-4 pt-6 pb-16">
       <h1 className="text-lg font-semibold mb-1">Edit {object.workshop_id}</h1>
-      {object.title && <p className="text-sm text-muted-foreground mb-6">{object.title}</p>}
+      {object.title && <p className="text-sm text-bark mb-6">{object.title}</p>}
       {!object.title && <div className="mb-6" />}
       <EditObjectForm object={object} parentWorkshopId={parentWorkshopId} />
     </main>

@@ -18,7 +18,7 @@ import type {
 } from '@/lib/types'
 
 const fieldClass =
-  'w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50'
+  'w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar disabled:opacity-50'
 
 type ParentOption = { id: string; workshop_id: string; object_type: ObjectType }
 
@@ -54,16 +54,16 @@ function ParentSearch({
         autoComplete="off"
       />
       {results.length > 0 && (
-        <ul className="absolute z-10 mt-1 w-full bg-background border border-input rounded-md shadow-lg divide-y divide-border">
+        <ul className="absolute z-10 mt-1 w-full bg-paper border border-hairline rounded-md shadow-lg divide-y divide-hairline">
           {results.map(r => (
             <li key={r.id}>
               <button
                 type="button"
-                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-sand transition-colors"
                 onClick={() => { onSelect(r); setQuery(''); setResults([]) }}
               >
                 <span className="font-mono text-sm font-medium">{r.workshop_id}</span>
-                <span className="text-xs text-muted-foreground capitalize">
+                <span className="text-xs text-bark capitalize">
                   {r.object_type.replace('_', ' ')}
                 </span>
               </button>
@@ -192,17 +192,17 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
       {/* Parent */}
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Parent <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Parent <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         {parentId && parentDisplay && !showParentSearch ? (
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-medium px-3 py-2 border border-input rounded-md bg-secondary">
+            <span className="font-mono text-sm font-medium px-3 py-2 border border-hairline rounded-md bg-sand">
               {parentDisplay}
             </span>
             <button
               type="button"
               onClick={() => setShowParentSearch(true)}
-              className="text-xs text-muted-foreground underline"
+              className="text-xs text-bark underline"
             >
               Change
             </button>
@@ -221,13 +221,13 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
               <button
                 type="button"
                 onClick={() => { setShowParentSearch(false); setParentId(object.parent_id); setParentDisplay(parentWorkshopId ?? null) }}
-                className="text-xs text-muted-foreground underline"
+                className="text-xs text-bark underline"
               >
                 Cancel
               </button>
             )}
             {!parentId && (
-              <p className="text-xs text-muted-foreground">No parent — this object is a root source.</p>
+              <p className="text-xs text-bark">No parent — this object is a root source.</p>
             )}
           </div>
         )}
@@ -235,19 +235,19 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Title <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Title <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <input value={title} onChange={e => setTitle(e.target.value)} className={fieldClass} placeholder="e.g. Backyard maple — Lynn Valley" maxLength={200} />
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Species <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Species <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <div className="flex gap-2">
           <input value={species} onChange={e => setSpecies(e.target.value)} className={fieldClass} placeholder="e.g. Hard maple" maxLength={100} />
           {species && (
-            <select value={speciesConf} onChange={e => setSpeciesConf(e.target.value as SpeciesConfidence)} className="shrink-0 border border-input rounded-md px-2 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring">
+            <select value={speciesConf} onChange={e => setSpeciesConf(e.target.value as SpeciesConfidence)} className="shrink-0 border border-hairline rounded-md px-2 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar">
               <option value="">Confidence</option>
               {SPECIES_CONFIDENCE_LEVELS.map(c => (
                 <option key={c.value} value={c.value}>{c.label}</option>
@@ -259,21 +259,21 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Dimensions <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Dimensions <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <input value={dimensions} onChange={e => setDimensions(e.target.value)} className={fieldClass} placeholder='e.g. 18" diameter, 4ft length' maxLength={200} />
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Finish <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Finish <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <input value={finish} onChange={e => setFinish(e.target.value)} className={fieldClass} placeholder="e.g. Osmo Polyx Oil" maxLength={200} />
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Lineage confidence <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Lineage confidence <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <select value={lineageConf} onChange={e => setLineageConf(e.target.value as LineageConfidence)} className={fieldClass}>
           <option value="">Not set</option>
@@ -285,14 +285,14 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Location <span className="text-xs text-muted-foreground font-normal ml-1">private · optional</span>
+          Location <span className="text-xs text-bark font-normal ml-1">private · optional</span>
         </label>
         <input value={location} onChange={e => setLocation(e.target.value)} className={fieldClass} placeholder="e.g. Shelf 3, green bin" maxLength={200} />
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Private notes <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Private notes <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <textarea value={privateNotes} onChange={e => setPrivateNotes(e.target.value)} className={`${fieldClass} min-h-[80px] resize-y`} />
       </div>
@@ -300,10 +300,10 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
       {formError && <p className="text-sm text-destructive">{formError}</p>}
 
       <div className="flex gap-3 pt-2">
-        <button type="button" onClick={() => router.push(`/objects/${object.id}`)} disabled={isPending} className="px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50">
+        <button type="button" onClick={() => router.push(`/objects/${object.id}`)} disabled={isPending} className="px-4 py-2.5 border border-hairline rounded-md text-sm font-medium hover:bg-sand transition-colors disabled:opacity-50">
           Cancel
         </button>
-        <button type="submit" disabled={isPending || !!idError} className="flex-1 bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors">
+        <button type="submit" disabled={isPending || !!idError} className="flex-1 bg-cedar text-paper rounded-md px-4 py-2.5 text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors">
           {isPending ? 'Saving…' : 'Save changes'}
         </button>
       </div>

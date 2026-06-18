@@ -46,7 +46,7 @@ export default function AuthForm() {
     <div className="space-y-4">
       <button
         onClick={handleGoogleSignIn}
-        className="w-full flex items-center justify-center gap-2 border border-input rounded-md px-4 py-2.5 text-sm font-medium hover:bg-accent transition-colors"
+        className="w-full flex items-center justify-center gap-2 border border-hairline rounded-md px-4 py-2.5 text-sm font-medium hover:bg-sand transition-colors"
       >
         <GoogleIcon />
         Sign in with Google
@@ -54,10 +54,10 @@ export default function AuthForm() {
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
+          <span className="w-full border-t border-hairline" />
         </div>
         <div className="relative flex justify-center text-xs">
-          <span className="bg-background px-2 text-muted-foreground">or</span>
+          <span className="bg-paper px-2 text-bark">or</span>
         </div>
       </div>
 
@@ -75,7 +75,7 @@ export default function AuthForm() {
             required
             autoFocus
             autoComplete="email"
-            className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
           />
         </div>
         <div className="space-y-1.5">
@@ -89,7 +89,7 @@ export default function AuthForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
           />
         </div>
         {(error || oauthError) && (
@@ -98,7 +98,7 @@ export default function AuthForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          className="w-full bg-cedar text-paper rounded-md px-4 py-2.5 text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors"
         >
           {loading ? 'Signing in…' : 'Sign in'}
         </button>

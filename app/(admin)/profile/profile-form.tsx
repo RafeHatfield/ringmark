@@ -83,7 +83,7 @@ export function ProfileForm({
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="w-[72px] h-[72px] rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-input hover:opacity-80 transition-opacity"
+            className="w-[72px] h-[72px] rounded-full bg-sand flex items-center justify-center overflow-hidden shrink-0 border border-hairline hover:opacity-80 transition-opacity"
           >
             {avatarPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -96,11 +96,11 @@ export function ProfileForm({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+              className="text-sm text-bark hover:text-ink transition-colors underline underline-offset-2"
             >
               {avatarPreview ? 'Change image' : 'Upload image'}
             </button>
-            <p className="text-xs text-muted-foreground mt-1">JPG or PNG, shown on your public piece pages</p>
+            <p className="text-xs text-bark mt-1">JPG or PNG, shown on your public piece pages</p>
           </div>
         </div>
         <input
@@ -123,7 +123,7 @@ export function ProfileForm({
           type="text"
           defaultValue={initialDisplayName}
           placeholder="e.g. Rafe Hatfield"
-          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
         />
       </div>
 
@@ -138,9 +138,9 @@ export function ProfileForm({
           type="text"
           defaultValue={initialWorkshopName}
           placeholder="e.g. Cedarline Woodworks"
-          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-bark">
           Shown on public piece pages. If left blank, your name is used instead.
         </p>
       </div>
@@ -156,7 +156,7 @@ export function ProfileForm({
           defaultValue={initialBio}
           rows={4}
           placeholder="A little about you and your work…"
-          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+          className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar resize-none"
         />
       </div>
 
@@ -171,9 +171,9 @@ export function ProfileForm({
           type="url"
           defaultValue={initialWebsiteUrl}
           placeholder="https://yourworkshop.com"
-          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-bark">
           Optional. Links your workshop name on public piece pages.
         </p>
       </div>
@@ -184,11 +184,11 @@ export function ProfileForm({
         <button
           type="submit"
           disabled={isPending}
-          className="px-4 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          className="px-4 py-2.5 bg-cedar text-paper rounded-md text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors"
         >
           {isPending ? 'Saving…' : 'Save profile'}
         </button>
-        {saved && <span className="text-sm text-muted-foreground">Saved.</span>}
+        {saved && <span className="text-sm text-bark">Saved.</span>}
       </div>
     </form>
   )
@@ -196,7 +196,7 @@ export function ProfileForm({
 
 function RingsIcon() {
   return (
-    <svg width="28" height="28" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.4" className="text-muted-foreground" aria-hidden="true">
+    <svg width="28" height="28" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.4" className="text-bark" aria-hidden="true">
       <circle cx="20.5" cy="20" r="4"/>
       <circle cx="20" cy="20" r="10"/>
       <circle cx="19.5" cy="20" r="16"/>

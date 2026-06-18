@@ -47,7 +47,7 @@ export default async function SettingsPage({
   return (
     <main className="max-w-2xl mx-auto px-4 pt-4 pb-16">
       <div className="flex items-center justify-between mb-5">
-        <Link href="/workshop" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/workshop" className="text-sm text-bark hover:text-ink">
           ← Back
         </Link>
       </div>
@@ -56,12 +56,12 @@ export default async function SettingsPage({
 
       {/* Members */}
       <section className="mb-10">
-        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">Members</h2>
-        <div className="border rounded-md divide-y divide-border">
+        <h2 className="text-xs text-bark tracking-wider mb-3">Members</h2>
+        <div className="border border-hairline rounded-md divide-y divide-hairline">
           {memberDetails.map((m) => (
             <div key={m.userId} className="px-4 py-3">
               <p className="text-sm">{m.email}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-bark mt-0.5">
                 Joined {new Date(m.joinedAt).toLocaleDateString()}
               </p>
             </div>
@@ -71,21 +71,21 @@ export default async function SettingsPage({
 
       {/* Invite */}
       <section className="mb-10">
-        <h2 className="text-xs text-muted-foreground tracking-wider mb-3">Invite</h2>
+        <h2 className="text-xs text-bark tracking-wider mb-3">Invite</h2>
 
         {newInviteUrl && (
-          <div className="border rounded-md px-4 py-3 mb-4 bg-muted/30">
-            <p className="text-xs text-muted-foreground mb-1">Share this link — expires in 7 days</p>
+          <div className="border border-hairline rounded-md px-4 py-3 mb-4 bg-sand/50">
+            <p className="text-xs text-bark mb-1">Share this link — expires in 7 days</p>
             <p className="font-mono text-xs break-all">{newInviteUrl}</p>
           </div>
         )}
 
         {invites && invites.length > 0 && !newInviteUrl && (
-          <div className="border rounded-md divide-y divide-border mb-4">
+          <div className="border border-hairline rounded-md divide-y divide-hairline mb-4">
             {invites.map((inv) => (
               <div key={inv.id} className="px-4 py-3">
                 <p className="font-mono text-xs break-all">{appUrl}/invite/{inv.id}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-xs text-bark mt-0.5">
                   Expires {new Date(inv.expires_at).toLocaleDateString()}
                 </p>
               </div>
@@ -96,12 +96,12 @@ export default async function SettingsPage({
         <form action={createInvite}>
           <button
             type="submit"
-            className="px-3 py-1.5 border border-input rounded-md text-sm hover:bg-accent transition-colors"
+            className="px-3 py-1.5 border border-hairline rounded-md text-sm hover:bg-sand transition-colors"
           >
             Generate invite link
           </button>
         </form>
-        <p className="text-xs text-muted-foreground mt-2">
+        <p className="text-xs text-bark mt-2">
           The person you invite will need to create a Ringmark account or sign in with Google, then follow the link.
         </p>
       </section>

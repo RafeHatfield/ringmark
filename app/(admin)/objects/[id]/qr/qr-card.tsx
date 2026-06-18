@@ -49,7 +49,7 @@ export default function QrCard({
       {/* Printable card */}
       <div
         ref={cardRef}
-        className="print:block border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center gap-4 max-w-xs mx-auto"
+        className="print:block border-2 border-dashed border-hairline rounded-xl p-6 flex flex-col items-center gap-4 max-w-xs mx-auto"
         id="qr-print-card"
       >
         {/* QR code — rendered locally via canvas, no external request */}
@@ -58,7 +58,7 @@ export default function QrCard({
         {/* Workshop ID */}
         <div className="text-center">
           <p className="text-2xl font-mono font-bold tracking-tight">{workshopId}</p>
-          <p className="text-xs text-muted-foreground mt-1">ringmark.org/p/{publicSlug}</p>
+          <p className="text-xs text-bark mt-1">ringmark.org/p/{publicSlug}</p>
         </div>
       </div>
 
@@ -66,19 +66,19 @@ export default function QrCard({
       <div className="flex flex-col gap-3 max-w-xs mx-auto">
         <button
           onClick={handlePrint}
-          className="w-full px-4 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+          className="w-full px-4 py-2.5 bg-cedar text-paper rounded-md text-sm font-medium hover:bg-heartwood transition-colors"
         >
           Print card
         </button>
         <button
           onClick={handleDownload}
-          className="w-full px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors"
+          className="w-full px-4 py-2.5 border border-hairline rounded-md text-sm font-medium hover:bg-sand transition-colors"
         >
           Download QR
         </button>
         <button
           onClick={handleCopyUrl}
-          className="w-full px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors"
+          className="w-full px-4 py-2.5 border border-hairline rounded-md text-sm font-medium hover:bg-sand transition-colors"
         >
           Copy public URL
         </button>
@@ -86,7 +86,7 @@ export default function QrCard({
           href={publicUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full text-center px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors"
+          className="w-full text-center px-4 py-2.5 border border-hairline rounded-md text-sm font-medium hover:bg-sand transition-colors"
         >
           Preview public page ↗
         </a>

@@ -18,7 +18,7 @@ export default async function ProfilePage() {
   return (
     <main className="max-w-2xl mx-auto px-4 pt-4 pb-16">
       <div className="mb-5">
-        <Link href="/workshop" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/workshop" className="text-sm text-bark hover:text-ink">
           ← Back
         </Link>
       </div>

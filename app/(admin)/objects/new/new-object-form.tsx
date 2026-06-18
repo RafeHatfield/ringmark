@@ -7,7 +7,7 @@ import { OBJECT_TYPES, OBJECT_STATUSES, SPECIES_CONFIDENCE_LEVELS } from '@/lib/
 import type { ObjectType, ObjectStatus, SpeciesConfidence } from '@/lib/types'
 
 const fieldClass =
-  'w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50'
+  'w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar disabled:opacity-50'
 
 export default function NewObjectForm({
   suggestedId,
@@ -99,14 +99,14 @@ export default function NewObjectForm({
             />
             {idError
               ? <p className="mt-1 text-xs text-destructive">{idError}</p>
-              : <p className="mt-1 text-xs text-muted-foreground">Auto-generated — edit if you prefer a different ID.</p>
+              : <p className="mt-1 text-xs text-bark">Auto-generated — edit if you prefer a different ID.</p>
             }
           </div>
 
           {!isSource && (
             <div>
               <label className="block text-sm font-medium mb-1.5">
-                Status <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+                Status <span className="text-xs text-bark font-normal ml-1">optional</span>
               </label>
               <select value={status} onChange={e => setStatus(e.target.value as ObjectStatus)} className={fieldClass}>
                 <option value="">None</option>
@@ -119,7 +119,7 @@ export default function NewObjectForm({
 
           <div>
             <label className="block text-sm font-medium mb-1.5">
-              Title <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+              Title <span className="text-xs text-bark font-normal ml-1">optional</span>
             </label>
             <input
               value={title}
@@ -132,7 +132,7 @@ export default function NewObjectForm({
 
           <div>
             <label className="block text-sm font-medium mb-1.5">
-              Species <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+              Species <span className="text-xs text-bark font-normal ml-1">optional</span>
             </label>
             <div className="flex gap-2">
               <input
@@ -146,7 +146,7 @@ export default function NewObjectForm({
                 <select
                   value={speciesConf}
                   onChange={e => setSpeciesConf(e.target.value as SpeciesConfidence)}
-                  className="shrink-0 border border-input rounded-md px-2 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="shrink-0 border border-hairline rounded-md px-2 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
                 >
                   <option value="">Confidence</option>
                   {SPECIES_CONFIDENCE_LEVELS.map(c => (
@@ -159,7 +159,7 @@ export default function NewObjectForm({
 
           <div>
             <label className="block text-sm font-medium mb-1.5">
-              Private notes <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+              Private notes <span className="text-xs text-bark font-normal ml-1">optional</span>
             </label>
             <textarea
               value={privateNotes}
@@ -176,14 +176,14 @@ export default function NewObjectForm({
               type="button"
               onClick={() => router.back()}
               disabled={isPending}
-              className="px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+              className="px-4 py-2.5 border border-hairline rounded-md text-sm font-medium hover:bg-sand transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending || !!idError}
-              className="flex-1 bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              className="flex-1 bg-cedar text-paper rounded-md px-4 py-2.5 text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors"
             >
               {isPending ? 'Saving…' : 'Save'}
             </button>

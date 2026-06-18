@@ -7,7 +7,7 @@ import { OBJECT_TYPES, OBJECT_STATUSES } from '@/lib/constants'
 import type { ObjectType, ObjectStatus } from '@/lib/types'
 
 const fieldClass =
-  'w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50'
+  'w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar disabled:opacity-50'
 
 type Props = {
   parentId: string
@@ -69,8 +69,8 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Parent indicator */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-md text-sm">
-        <span className="text-muted-foreground">Child of</span>
+      <div className="flex items-center gap-2 px-3 py-2 bg-sand rounded-md text-sm">
+        <span className="text-bark">Child of</span>
         <span className="font-mono font-medium">{parentWorkshopId}</span>
       </div>
 
@@ -86,7 +86,7 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
         />
         {idError
           ? <p className="mt-1 text-xs text-destructive">{idError}</p>
-          : <p className="mt-1 text-xs text-muted-foreground">Flat suffix under root — e.g. {parentWorkshopId.split('-')[0]}-3</p>
+          : <p className="mt-1 text-xs text-bark">Flat suffix under root — e.g. {parentWorkshopId.split('-')[0]}-3</p>
         }
       </div>
 
@@ -104,7 +104,7 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Status <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Status <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <select value={status} onChange={e => setStatus(e.target.value as ObjectStatus)} className={fieldClass}>
           <option value="">None</option>
@@ -116,7 +116,7 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Title <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Title <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <input
           value={title}
@@ -129,7 +129,7 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Species <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Species <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <input
           value={species}
@@ -142,7 +142,7 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
 
       <div>
         <label className="block text-sm font-medium mb-1.5">
-          Private notes <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+          Private notes <span className="text-xs text-bark font-normal ml-1">optional</span>
         </label>
         <textarea
           value={privateNotes}
@@ -158,14 +158,14 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
           type="button"
           onClick={() => router.push(`/objects/${parentId}`)}
           disabled={isPending}
-          className="px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+          className="px-4 py-2.5 border border-hairline rounded-md text-sm font-medium hover:bg-sand transition-colors disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isPending || !!idError}
-          className="flex-1 bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          className="flex-1 bg-cedar text-paper rounded-md px-4 py-2.5 text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors"
         >
           {isPending ? 'Saving…' : 'Save'}
         </button>

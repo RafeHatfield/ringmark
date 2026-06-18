@@ -27,13 +27,13 @@ export default async function QrCardPage({
   return (
     <main className="max-w-2xl mx-auto px-4 pt-6 pb-16">
       <div className="flex items-center justify-between mb-6">
-        <Link href={`/objects/${id}`} className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href={`/objects/${id}`} className="text-sm text-bark hover:text-ink">
           ← Back
         </Link>
       </div>
 
       <h1 className="text-lg font-semibold mb-1">QR Card</h1>
-      <p className="text-sm text-muted-foreground mb-6">
+      <p className="text-sm text-bark mb-6">
         <span className="font-mono">{object.workshop_id}</span>
         {object.title && <span className="ml-2">{object.title}</span>}
       </p>

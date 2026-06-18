@@ -45,7 +45,7 @@ export default async function WorkshopPage({
       <div className="mb-8">
         <Link
           href="/objects/new"
-          className="inline-flex items-center justify-center px-4 py-2.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+          className="inline-flex items-center justify-center px-4 py-2.5 bg-cedar text-paper rounded-md text-sm font-medium hover:bg-heartwood transition-colors"
         >
           + Add
         </Link>
@@ -53,16 +53,16 @@ export default async function WorkshopPage({
 
       {!objects || objects.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-muted-foreground text-sm">
+          <p className="text-bark text-sm">
             {query ? `No results for "${query}".` : 'No pieces yet. Add your first source to get started.'}
           </p>
         </div>
       ) : (
         <div>
-          <h2 className="text-xs text-muted-foreground tracking-wider mb-2">
+          <h2 className="text-xs text-bark tracking-wider mb-2">
             {query ? `Results for "${query}"` : 'Recent'}
           </h2>
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-hairline">
             {objects.map((obj) => {
               const typeLabel = OBJECT_TYPES.find((t) => t.value === obj.object_type)?.label ?? obj.object_type
               return (
@@ -74,16 +74,16 @@ export default async function WorkshopPage({
                     <div className="min-w-0">
                       <span className="font-mono text-sm font-medium">{obj.workshop_id}</span>
                       {obj.title && (
-                        <span className="text-xs text-muted-foreground ml-2 truncate">{obj.title}</span>
+                        <span className="text-xs text-bark ml-2 truncate">{obj.title}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {obj.status && (
-                        <span className="text-xs text-muted-foreground capitalize">
+                        <span className="text-xs text-bark capitalize">
                           {obj.status.replace('_', ' ')}
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground">{typeLabel}</span>
+                      <span className="text-xs text-bark">{typeLabel}</span>
                     </div>
                   </Link>
                 </li>

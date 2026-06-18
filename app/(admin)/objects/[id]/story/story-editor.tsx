@@ -6,7 +6,7 @@ import { saveStory, publishObject, unpublishObject } from '@/actions/story'
 import { DEFAULT_CARE_INSTRUCTIONS } from '@/lib/constants'
 
 const fieldClass =
-  'w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50'
+  'w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar disabled:opacity-50'
 
 type Props = {
   objectId: string
@@ -77,7 +77,7 @@ export default function StoryEditor({
   return (
     <div className="space-y-6">
       {/* Publish status bar */}
-      <div className="flex items-center justify-between gap-4 p-4 border rounded-md bg-secondary/30">
+      <div className="flex items-center justify-between gap-4 p-4 border border-hairline rounded-md bg-sand/50">
         <div>
           <p className="text-sm font-medium">
             {isPublished ? 'Published' : 'Not published'}
@@ -87,13 +87,13 @@ export default function StoryEditor({
               href={`/p/${publicSlug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-muted-foreground underline"
+              className="text-xs text-bark underline"
             >
               /p/{publicSlug} ↗
             </a>
           )}
           {!isPublished && (
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-bark mt-0.5">
               Save your story, then publish to make it visible.
             </p>
           )}
@@ -103,7 +103,7 @@ export default function StoryEditor({
             type="button"
             onClick={handleUnpublish}
             disabled={isPending}
-            className="shrink-0 px-3 py-1.5 border border-input rounded-md text-sm hover:bg-accent transition-colors disabled:opacity-50"
+            className="shrink-0 px-3 py-1.5 border border-hairline rounded-md text-sm hover:bg-sand transition-colors disabled:opacity-50"
           >
             Unpublish
           </button>
@@ -112,7 +112,7 @@ export default function StoryEditor({
             type="button"
             onClick={handlePublish}
             disabled={isPending}
-            className="shrink-0 px-4 py-1.5 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="shrink-0 px-4 py-1.5 bg-cedar text-paper rounded-md text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors"
           >
             Publish
           </button>
@@ -124,7 +124,7 @@ export default function StoryEditor({
         <div>
           <label className="block text-sm font-medium mb-1.5">
             Public title{' '}
-            <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+            <span className="text-xs text-bark font-normal ml-1">optional</span>
           </label>
           <input
             value={title}
@@ -133,7 +133,7 @@ export default function StoryEditor({
             placeholder="e.g. Lynn Valley Maple"
             maxLength={200}
           />
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-bark">
             Shown at the top of the public page. Defaults to the workshop ID if blank.
           </p>
         </div>
@@ -141,7 +141,7 @@ export default function StoryEditor({
         <div>
           <label className="block text-sm font-medium mb-1.5">
             Story{' '}
-            <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+            <span className="text-xs text-bark font-normal ml-1">optional</span>
           </label>
           <textarea
             value={story}
@@ -154,7 +154,7 @@ export default function StoryEditor({
         <div>
           <label className="block text-sm font-medium mb-1.5">
             Public notes{' '}
-            <span className="text-xs text-muted-foreground font-normal ml-1">optional</span>
+            <span className="text-xs text-bark font-normal ml-1">optional</span>
           </label>
           <textarea
             value={notes}
@@ -171,7 +171,7 @@ export default function StoryEditor({
             onChange={(e) => setCare(e.target.value)}
             className={`${fieldClass} min-h-[80px] resize-y`}
           />
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-bark">
             Shown on the public page. Edit to suit this piece.
           </p>
         </div>
@@ -184,14 +184,14 @@ export default function StoryEditor({
             type="button"
             onClick={() => router.push(`/objects/${objectId}`)}
             disabled={isPending}
-            className="px-4 py-2.5 border border-input rounded-md text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 border border-hairline rounded-md text-sm font-medium hover:bg-sand transition-colors disabled:opacity-50"
           >
             ← Back
           </button>
           <button
             type="submit"
             disabled={isPending}
-            className="flex-1 bg-primary text-primary-foreground rounded-md px-4 py-2.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="flex-1 bg-cedar text-paper rounded-md px-4 py-2.5 text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors"
           >
             {isPending ? 'Saving…' : saved ? 'Saved!' : 'Save draft'}
           </button>
