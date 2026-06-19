@@ -33,7 +33,7 @@ export function DeleteObjectButton({ objectId }: { objectId: string }) {
         <button
           onClick={() => setConfirming(false)}
           disabled={isPending}
-          className="text-sm text-muted-foreground hover:text-foreground"
+          className="text-sm text-bark hover:text-ink"
         >
           Cancel
         </button>
