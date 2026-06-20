@@ -178,8 +178,6 @@ export default async function PublicStoryPage({
     makerAvatarUrl = data.publicUrl
   }
 
-  const makerWebsiteUrl = accountData?.website_url ?? null
-
   const displayTitle = object.public_title || object.title || `/${object.public_slug}`
 
   return (
@@ -288,20 +286,12 @@ export default async function PublicStoryPage({
                 <p className="text-[11px] tracking-[0.1em] uppercase text-bark m-0 mb-[2px]">
                   From the workshop of
                 </p>
-                {makerWebsiteUrl ? (
-                  <a
-                    href={makerWebsiteUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-fraunces font-medium text-[17px] text-ink hover:text-cedar transition-colors no-underline"
-                  >
-                    {workshopName}
-                  </a>
-                ) : (
-                  <p className="font-fraunces font-medium text-[17px] text-ink m-0">
-                    {workshopName}
-                  </p>
-                )}
+                <Link
+                  href="/maker"
+                  className="font-fraunces font-medium text-[17px] text-ink hover:text-cedar transition-colors no-underline"
+                >
+                  {workshopName}
+                </Link>
               </div>
             </div>
 
