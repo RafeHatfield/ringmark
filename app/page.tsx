@@ -152,9 +152,9 @@ export default async function LandingPage() {
               </Link>
               <p className="text-[14px] text-bark mt-4 mb-0">
                 Not set up yet?{' '}
-                <a href="mailto:hello@ringmark.org" className="text-cedar no-underline hover:text-heartwood hover:underline">
+                <Link href="/contact" className="text-cedar no-underline hover:text-heartwood hover:underline">
                   Get in touch
-                </a>.
+                </Link>.
               </p>
             </section>
           </main>
