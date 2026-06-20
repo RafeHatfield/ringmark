@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -15,7 +16,7 @@ export async function generateMetadata({
   const admin = createAdminClient()
   const { data: object } = await admin
     .from('wood_objects')
-    .select('public_title, title, public_story, public_slug, account_id, is_published')
+    .select('id, public_title, title, public_story, public_slug, account_id, is_published')
     .eq('public_slug', slug)
     .eq('is_published', true)
     .single()
@@ -36,49 +37,23 @@ export async function generateMetadata({
     ? object.public_story.slice(0, 160).replace(/\s+/g, ' ').trim()
     : `A handmade piece from the workshop of ${workshopName}.`
 
-  // Get hero photo for OG image — fetch object ID first via admin client
-  const { data: objectRow } = await admin
-    .from('wood_objects')
-    .select('id')
-    .eq('public_slug', slug)
-    .single()
-
-  let ogImage: string | undefined
-  if (objectRow?.id) {
-    const { data: photos } = await admin
-      .from('object_photos')
-      .select('storage_path')
-      .eq('object_id', objectRow.id)
-      .eq('is_public', true)
-      .order('sort_order', { ascending: false })
-      .limit(1)
-
-    if (photos?.[0]?.storage_path) {
-      const { data: signed } = await admin.storage
-        .from('object-photos')
-        .createSignedUrls([photos[0].storage_path], 3600)
-      ogImage = signed?.[0]?.signedUrl ?? undefined
-    }
-  }
-
   const url = `${appUrl}/p/${slug}`
 
   return {
     title: `${title} — Ringmark`,
     description,
+    alternates: { canonical: url },
     openGraph: {
       title,
       description,
       url,
       siteName: 'Ringmark',
       type: 'article',
-      ...(ogImage ? { images: [{ url: ogImage, width: 1200, height: 900, alt: title }] } : {}),
     },
     twitter: {
-      card: ogImage ? 'summary_large_image' : 'summary',
+      card: 'summary_large_image',
       title,
       description,
-      ...(ogImage ? { images: [ogImage] } : {}),
     },
   }
 }
@@ -179,6 +154,20 @@ export default async function PublicStoryPage({
   }
 
   const displayTitle = object.public_title || object.title || `/${object.public_slug}`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: displayTitle,
+    ...(object.public_story
+      ? { description: object.public_story.slice(0, 500).replace(/\s+/g, ' ').trim() }
+      : {}),
+    ...(photoUrls[0]?.url ? { image: photoUrls[0].url } : {}),
+    brand: { '@type': 'Brand', name: workshopName },
+    url: `${appUrl}/p/${object.public_slug}`,
+    ...(object.species ? { material: object.species } : {}),
+  }
 
   return (
     <>
@@ -215,6 +204,10 @@ export default async function PublicStoryPage({
         )}
         <main className="max-w-[480px] mx-auto px-[22px] pb-8">
           <article>
+            <script
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
 
             {/* Eyebrow */}
             <p className="reveal text-center text-[12px] tracking-[0.16em] uppercase text-cedar pt-[30px] pb-[18px] m-0">
@@ -223,12 +216,14 @@ export default async function PublicStoryPage({
 
             {/* Hero */}
             {photoUrls[0]?.url ? (
-              <div className="reveal aspect-[4/3] rounded-[14px] overflow-hidden bg-sand">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+              <div className="reveal aspect-[4/3] rounded-[14px] overflow-hidden bg-sand relative">
+                <Image
                   src={photoUrls[0].url}
                   alt={photoUrls[0].caption ?? displayTitle}
-                  className="w-full h-full object-cover block"
+                  fill
+                  sizes="480px"
+                  className="object-cover"
+                  priority
                 />
               </div>
             ) : (
@@ -271,8 +266,7 @@ export default async function PublicStoryPage({
             <div className="reveal flex items-center gap-[14px]">
               <div className="w-[46px] h-[46px] rounded-full bg-sand flex items-center justify-center shrink-0 overflow-hidden" aria-hidden="true">
                 {makerAvatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={makerAvatarUrl} alt="" className="w-full h-full object-cover" />
+                  <Image src={makerAvatarUrl} alt="" width={46} height={46} className="w-full h-full object-cover" />
                 ) : (
                   <svg width="30" height="30" viewBox="0 0 40 40" fill="none" stroke="#B0612F" strokeWidth="1.3">
                     <circle cx="21" cy="20" r="3"/>

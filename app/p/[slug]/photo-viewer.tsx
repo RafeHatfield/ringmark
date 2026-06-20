@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface Photo {
@@ -94,11 +95,10 @@ export function PhotoStrip({ photos }: Props) {
             <button
               key={i}
               onClick={e => open(i + 1, e)}
-              className="aspect-square rounded-[9px] bg-sand overflow-hidden cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-cedar"
+              className="relative aspect-square rounded-[9px] bg-sand overflow-hidden cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-cedar"
               aria-label={p.caption ?? `Photo ${i + 2}`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.url} alt={p.caption ?? ''} className="w-full h-full object-cover" />
+              <Image src={p.url} alt={p.caption ?? ''} fill sizes="160px" className="object-cover" />
             </button>
           ) : null,
         )}

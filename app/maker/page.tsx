@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function generateMetadata(): Promise<Metadata> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
   const admin = createAdminClient()
   const { data: account } = await admin
     .from('accounts')
@@ -16,9 +18,24 @@ export async function generateMetadata(): Promise<Metadata> {
     ? account.bio.slice(0, 160).replace(/\s+/g, ' ').trim()
     : `Handmade wooden pieces by ${makerName}.`
 
+  const url = `${appUrl}/maker`
+
   return {
     title: `${makerName} — Ringmark`,
     description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: makerName,
+      description,
+      url,
+      siteName: 'Ringmark',
+      type: 'profile',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: makerName,
+      description,
+    },
   }
 }
 
@@ -59,6 +76,16 @@ export default async function MakerPage() {
     ? account.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')
     : null
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Person',
+    name: makerName,
+    ...(account.bio ? { description: account.bio } : {}),
+    url: account.website_url || `${appUrl}/maker`,
+    ...(avatarUrl ? { image: avatarUrl } : {}),
+  }
+
   return (
     <>
       <style>{`
@@ -74,6 +101,10 @@ export default async function MakerPage() {
         @media (prefers-reduced-motion: reduce) { .reveal { animation: none; } }
       `}</style>
 
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="min-h-screen bg-paper text-ink font-sans" style={{ WebkitFontSmoothing: 'antialiased' }}>
         <main className="max-w-[480px] mx-auto px-[22px] pb-8">
 
@@ -81,8 +112,7 @@ export default async function MakerPage() {
           <div className="reveal pt-[48px] pb-[28px] flex flex-col items-center text-center">
             <div className="w-[80px] h-[80px] rounded-full bg-sand mx-auto mb-[18px] overflow-hidden flex items-center justify-center shrink-0">
               {avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                <Image src={avatarUrl} alt="" width={80} height={80} className="w-full h-full object-cover" />
               ) : (
                 <RingsIcon />
               )}

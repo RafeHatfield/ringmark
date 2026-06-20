@@ -12,9 +12,11 @@ const fraunces = Fraunces({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'),
   title: 'Ringmark',
   description: 'Track the story of wood from source to finished piece.',
   manifest: '/manifest.json',
+  icons: { apple: '/apple-touch-icon.png' },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -28,7 +30,7 @@ export const metadata: Metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#18181b',
+  themeColor: '#FBF6EE',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
