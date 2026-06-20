@@ -1,6 +1,8 @@
 'use server'
 
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export type ContactResult = { success: true } | { error: string }
 
@@ -20,26 +22,20 @@ export async function sendContactEmail(_prev: ContactResult | null, formData: Fo
     return { error: 'Please enter a valid email address.' }
   }
 
-  const gmailUser = process.env.GMAIL_USER
-  const gmailPass = process.env.GMAIL_APP_PASSWORD
-  if (!gmailUser || !gmailPass) return { error: 'Contact form is not configured.' }
+  const to = process.env.CONTACT_EMAIL
+  if (!to) return { error: 'Contact form is not configured.' }
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: gmailUser, pass: gmailPass },
+  const { error } = await resend.emails.send({
+    from: 'Ringmark <hello@paceway.app>',
+    to,
+    replyTo: email,
+    subject: `[Ringmark] Message from ${name}`,
+    text: `From: ${name} <${email}>\n\n${message}`,
+    html: `<p><strong>From:</strong> ${name} &lt;${email}&gt;</p><p>${message.replace(/\n/g, '<br/>')}</p>`,
   })
 
-  try {
-    await transporter.sendMail({
-      from: `Ringmark <${gmailUser}>`,
-      to: gmailUser,
-      replyTo: email,
-      subject: `Message from ${name} via Ringmark`,
-      text: `From: ${name} <${email}>\n\n${message}`,
-      html: `<p><strong>From:</strong> ${name} &lt;${email}&gt;</p><p>${message.replace(/\n/g, '<br/>')}</p>`,
-    })
-  } catch (err) {
-    console.error('[contact]', err)
+  if (error) {
+    console.error('[contact]', error)
     return { error: 'Something went wrong. Please try again.' }
   }
 
