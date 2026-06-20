@@ -35,7 +35,6 @@
   "devDependencies": {
     "@playwright/test": "^1.61.0",
     "@types/node": "^20",
-    "@types/nodemailer": "^8.0.1",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
