@@ -21,9 +21,9 @@ for (const { name, size } of publicSizes) {
   console.log(`Generated public/${name}`)
 }
 
-// 32x32 PNG in app/ — Next.js auto-discovers as the browser tab favicon
+// 32x32 PNG for explicit favicon metadata
 await sharp(svg, { density: Math.ceil((32 / 40) * 96) })
   .resize(32, 32)
   .png()
-  .toFile(join(root, 'app', 'icon.png'))
-console.log('Generated app/icon.png')
+  .toFile(join(root, 'public', 'icon-32.png'))
+console.log('Generated public/icon-32.png')

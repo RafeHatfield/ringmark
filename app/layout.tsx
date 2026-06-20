@@ -16,7 +16,13 @@ export const metadata: Metadata = {
   title: 'Ringmark',
   description: 'Track the story of wood from source to finished piece.',
   manifest: '/manifest.json',
-  icons: { apple: '/apple-touch-icon.png' },
+  icons: {
+    icon: [
+      { url: '/icon-32.png', type: 'image/png', sizes: '32x32' },
+      { url: '/icon-192.png', type: 'image/png', sizes: '192x192' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
