@@ -4,12 +4,12 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 
-export async function saveProfile(formData: FormData) {
+export async function saveProfile(formData: FormData): Promise<{ error: string } | void> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
+  if (!user) return { error: 'Not authenticated' }
 
   const account = await getOrCreateAccount()
 

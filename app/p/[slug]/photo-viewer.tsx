@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { MAX_VISIBLE_PHOTOS } from '@/lib/constants'
 
 interface Photo {
   url: string
@@ -14,8 +15,6 @@ interface Props {
   photos: Photo[]
 }
 
-const MAX_VISIBLE = 3
-
 export function PhotoStrip({ photos }: Props) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [animating, setAnimating] = useState(false)
@@ -26,11 +25,11 @@ export function PhotoStrip({ photos }: Props) {
 
   // Strip = photos[1..]; hero (index 0) is reachable via prev/next but not shown as a thumb
   const stripPhotos = photos.slice(1)
-  const visibleStrip = stripPhotos.length <= MAX_VISIBLE
+  const visibleStrip = stripPhotos.length <= MAX_VISIBLE_PHOTOS
     ? stripPhotos
-    : stripPhotos.slice(0, MAX_VISIBLE - 1)
-  const overflowCount = stripPhotos.length > MAX_VISIBLE
-    ? stripPhotos.length - (MAX_VISIBLE - 1)
+    : stripPhotos.slice(0, MAX_VISIBLE_PHOTOS - 1)
+  const overflowCount = stripPhotos.length > MAX_VISIBLE_PHOTOS
+    ? stripPhotos.length - (MAX_VISIBLE_PHOTOS - 1)
     : 0
 
   function open(index: number, e: React.MouseEvent<HTMLElement>) {
@@ -49,17 +48,17 @@ export function PhotoStrip({ photos }: Props) {
     }, 280)
   }, [])
 
-  function prev() {
+  const prev = useCallback(() => {
     setLightboxIndex(i => i !== null ? (i - 1 + photos.length) % photos.length : 0)
     setOriginRect(null)
     setAnimating(true)
-  }
+  }, [photos.length])
 
-  function next() {
+  const next = useCallback(() => {
     setLightboxIndex(i => i !== null ? (i + 1) % photos.length : 0)
     setOriginRect(null)
     setAnimating(true)
-  }
+  }, [photos.length])
 
   useEffect(() => {
     if (!isOpen) return
@@ -70,7 +69,7 @@ export function PhotoStrip({ photos }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, close])
+  }, [isOpen, close, prev, next])
 
   function getOriginTransform(): string {
     if (!originRect) return 'translate(-50%, -50%) scale(0.6)'
@@ -93,7 +92,7 @@ export function PhotoStrip({ photos }: Props) {
         {visibleStrip.map((p, i) =>
           p.url ? (
             <button
-              key={i}
+              key={p.url}
               onClick={e => open(i + 1, e)}
               className="relative aspect-square rounded-[9px] bg-sand overflow-hidden cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-cedar"
               aria-label={p.caption ?? `Photo ${i + 2}`}
@@ -104,7 +103,7 @@ export function PhotoStrip({ photos }: Props) {
         )}
         {overflowCount > 0 && (
           <button
-            onClick={e => open(MAX_VISIBLE, e)}
+            onClick={e => open(MAX_VISIBLE_PHOTOS, e)}
             className="aspect-square rounded-[9px] bg-sand flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cedar"
             aria-label={`View ${overflowCount} more photos`}
           >

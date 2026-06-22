@@ -4,6 +4,15 @@ import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export type ContactResult = { success: true } | { error: string }
 
 export async function sendContactEmail(_prev: ContactResult | null, formData: FormData): Promise<ContactResult> {
@@ -31,7 +40,7 @@ export async function sendContactEmail(_prev: ContactResult | null, formData: Fo
     replyTo: email,
     subject: `[Ringmark] Message from ${name}`,
     text: `From: ${name} <${email}>\n\n${message}`,
-    html: `<p><strong>From:</strong> ${name} &lt;${email}&gt;</p><p>${message.replace(/\n/g, '<br/>')}</p>`,
+    html: `<p><strong>From:</strong> ${escapeHtml(name)} &lt;${escapeHtml(email)}&gt;</p><p>${escapeHtml(message).replace(/\n/g, '<br/>')}</p>`,
   })
 
   if (error) {

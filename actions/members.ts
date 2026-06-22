@@ -4,14 +4,17 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 
-export async function createInvite(): Promise<never> {
+export async function createInvite(): Promise<void> {
   const supabase = await createClient()
   const account = await getOrCreateAccount()
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
+  if (!user) {
+    console.error('[createInvite] Not authenticated')
+    return
+  }
 
   const { data, error } = await supabase
     .from('account_invites')
@@ -19,7 +22,10 @@ export async function createInvite(): Promise<never> {
     .select('id')
     .single()
 
-  if (error || !data) throw new Error(error?.message ?? 'Failed to create invite')
+  if (error || !data) {
+    console.error('[createInvite]', error?.message ?? 'Failed to create invite')
+    return
+  }
 
   redirect(`/settings?invite=${data.id}`)
 }

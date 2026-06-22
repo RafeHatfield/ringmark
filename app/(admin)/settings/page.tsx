@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createInvite } from '@/actions/members'
+import { APP_URL } from '@/lib/constants'
 
 export default async function SettingsPage({
   searchParams,
@@ -41,7 +42,7 @@ export default async function SettingsPage({
     .gt('expires_at', new Date().toISOString())
     .order('expires_at')
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+  const appUrl = APP_URL
   const newInviteUrl = newInviteToken ? `${appUrl}/invite/${newInviteToken}` : null
 
   return (

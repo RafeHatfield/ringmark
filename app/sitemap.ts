@@ -1,8 +1,9 @@
 import type { MetadataRoute } from 'next'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { APP_URL } from '@/lib/constants'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
+  const appUrl = APP_URL
 
   const admin = createAdminClient()
   const { data: objects } = await admin

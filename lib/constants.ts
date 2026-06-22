@@ -45,3 +45,7 @@ export const LINEAGE_CONFIDENCE_LEVELS: { value: LineageConfidence; label: strin
 
 export const DEFAULT_CARE_INSTRUCTIONS =
   'Wipe clean with a damp cloth. Do not soak. Do not put in the dishwasher. Refresh with a food-safe oil or wax when the wood looks dry.'
+
+export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
+export const SIGNED_URL_EXPIRY = 3600
+export const MAX_VISIBLE_PHOTOS = 3

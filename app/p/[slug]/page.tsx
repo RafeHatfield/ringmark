@@ -3,6 +3,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { APP_URL, SIGNED_URL_EXPIRY } from '@/lib/constants'
+import { getWorkshopName } from '@/lib/utils'
 import { PhotoStrip } from './photo-viewer'
 
 export async function generateMetadata({
@@ -11,7 +13,6 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>
 }): Promise<Metadata> {
   const { slug } = await params
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
 
   const admin = createAdminClient()
   const { data: object } = await admin
@@ -19,7 +20,7 @@ export async function generateMetadata({
     .select('id, public_title, title, public_story, public_slug, account_id, is_published')
     .eq('public_slug', slug)
     .eq('is_published', true)
-    .single()
+    .maybeSingle()
 
   if (!object) {
     return { title: 'Ringmark' }
@@ -29,15 +30,15 @@ export async function generateMetadata({
     .from('accounts')
     .select('workshop_name, display_name, name')
     .eq('id', object.account_id)
-    .single()
+    .maybeSingle()
 
   const title = object.public_title || object.title || slug
-  const workshopName = account?.workshop_name || account?.display_name || account?.name || 'Ringmark'
+  const workshopName = getWorkshopName(account)
   const description = object.public_story
     ? object.public_story.slice(0, 160).replace(/\s+/g, ' ').trim()
     : `A handmade piece from the workshop of ${workshopName}.`
 
-  const url = `${appUrl}/p/${slug}`
+  const url = `${APP_URL}/p/${slug}`
 
   return {
     title: `${title} — Ringmark`,
@@ -66,56 +67,51 @@ export default async function PublicStoryPage({
   const { slug } = await params
   const supabase = await createClient()
 
-  const { data: authCheck } = await supabase
-    .from('wood_objects')
-    .select('id, is_published, account_id')
-    .eq('public_slug', slug)
-    .single()
-
-  if (!authCheck) {
-    return <NotFound message="This piece could not be found." />
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // Check ownership — owner sees an edit link but still views the public page
-  let isOwner = false
-  if (user) {
-    const { data: account } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('id', authCheck.account_id)
-      .single()
-    isOwner = !!account
-  }
-
-  // Non-owners can't see unpublished pieces; owners can preview their own
-  if (!authCheck.is_published && !isOwner) {
-    return <NotFound message="This piece's story hasn't been published yet." />
-  }
-
-  // Fetch only public fields — NEVER select private_notes, location_text, or workshop_id
-  const { data: object } = await supabase
-    .from('wood_objects')
-    .select(
-      'id, public_slug, object_type, status, title, species, public_title, public_story, public_notes, public_care, is_published',
-    )
-    .eq('public_slug', slug)
-    .single()
+  // Round 1: user session + object details in parallel
+  // (object query includes account_id + is_published for auth routing)
+  const [
+    { data: { user } },
+    { data: object },
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from('wood_objects')
+      .select(
+        'id, public_slug, account_id, is_published, object_type, status, title, species, public_title, public_story, public_notes, public_care',
+      )
+      .eq('public_slug', slug)
+      .maybeSingle(),
+  ])
 
   if (!object) {
     return <NotFound message="This piece could not be found." />
   }
 
-  // Fetch public photos — finished piece first (highest sort_order)
-  const { data: photos } = await supabase
-    .from('object_photos')
-    .select('id, storage_path, caption, sort_order')
-    .eq('object_id', object.id)
-    .eq('is_public', true)
-    .order('sort_order', { ascending: false })
+  // Round 2: ownership check + photos + account data in parallel
+  const admin = createAdminClient()
+  const [ownerCheck, { data: photos }, { data: accountData }] = await Promise.all([
+    user
+      ? supabase.from('accounts').select('id').eq('id', object.account_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('object_photos')
+      .select('id, storage_path, caption, sort_order')
+      .eq('object_id', object.id)
+      .eq('is_public', true)
+      .order('sort_order', { ascending: false }),
+    admin
+      .from('accounts')
+      .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url')
+      .eq('id', object.account_id)
+      .maybeSingle(),
+  ])
+
+  const isOwner = !!ownerCheck?.data
+
+  // Non-owners can't see unpublished pieces; owners can preview their own
+  if (!object.is_published && !isOwner) {
+    return <NotFound message="This piece's story hasn't been published yet." />
+  }
 
   let photoUrls: { caption: string | null; url: string }[] = []
   if (photos && photos.length > 0) {
@@ -123,7 +119,7 @@ export default async function PublicStoryPage({
       .from('object-photos')
       .createSignedUrls(
         photos.map((p) => p.storage_path),
-        3600,
+        SIGNED_URL_EXPIRY,
       )
     photoUrls = photos.map((p, i) => ({
       caption: p.caption,
@@ -131,19 +127,7 @@ export default async function PublicStoryPage({
     }))
   }
 
-  // Fetch account profile via service role (anon role can't read accounts)
-  const admin = createAdminClient()
-  const { data: accountData } = await admin
-    .from('accounts')
-    .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url')
-    .eq('id', authCheck.account_id)
-    .single()
-
-  const workshopName =
-    accountData?.workshop_name ||
-    accountData?.display_name ||
-    accountData?.name ||
-    'Ringmark'
+  const workshopName = getWorkshopName(accountData)
 
   let makerAvatarUrl: string | null = null
   if (accountData?.avatar_storage_path) {
@@ -154,7 +138,6 @@ export default async function PublicStoryPage({
   }
 
   const displayTitle = object.public_title || object.title || `/${object.public_slug}`
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -165,7 +148,7 @@ export default async function PublicStoryPage({
       : {}),
     ...(photoUrls[0]?.url ? { image: photoUrls[0].url } : {}),
     brand: { '@type': 'Brand', name: workshopName },
-    url: `${appUrl}/p/${object.public_slug}`,
+    url: `${APP_URL}/p/${object.public_slug}`,
     ...(object.species ? { material: object.species } : {}),
   }
 
@@ -191,10 +174,10 @@ export default async function PublicStoryPage({
           <div className="bg-sand border-b border-hairline">
             <div className="max-w-[480px] mx-auto px-[22px] py-[10px] flex items-center justify-between">
               <span className="text-[12px] text-bark">
-                {authCheck.is_published ? 'Published · public view' : 'Draft · not yet published'}
+                {object.is_published ? 'Published · public view' : 'Draft · not yet published'}
               </span>
               <Link
-                href={`/objects/${authCheck.id}/story`}
+                href={`/objects/${object.id}/story`}
                 className="text-[12px] text-cedar hover:text-heartwood transition-colors"
               >
                 Edit story →

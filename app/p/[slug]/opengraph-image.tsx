@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getWorkshopName } from '@/lib/utils'
 
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
@@ -26,8 +27,7 @@ export default async function OgImage({ params }: { params: Promise<{ slug: stri
         .single()
     : { data: null }
 
-  const workshopName =
-    account?.workshop_name || account?.display_name || account?.name || 'Ringmark'
+  const workshopName = getWorkshopName(account)
 
   let heroUrl: string | null = null
   if (object?.id) {

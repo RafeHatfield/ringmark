@@ -2,23 +2,23 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { APP_URL } from '@/lib/constants'
 
 export async function generateMetadata(): Promise<Metadata> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
   const admin = createAdminClient()
   const { data: account } = await admin
     .from('accounts')
     .select('display_name, workshop_name, name, bio')
     .order('created_at', { ascending: true })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   const makerName = account?.workshop_name || account?.display_name || account?.name || 'The Maker'
   const description = account?.bio
     ? account.bio.slice(0, 160).replace(/\s+/g, ' ').trim()
     : `Handmade wooden pieces by ${makerName}.`
 
-  const url = `${appUrl}/maker`
+  const url = `${APP_URL}/maker`
 
   return {
     title: `${makerName} — Ringmark`,
@@ -47,7 +47,7 @@ export default async function MakerPage() {
     .select('display_name, workshop_name, name, bio, avatar_storage_path, website_url')
     .order('created_at', { ascending: true })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   // Fetch published pieces — public fields only, never private_notes / location_text / workshop_id
   const { data: pieces } = await admin
@@ -76,13 +76,12 @@ export default async function MakerPage() {
     ? account.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')
     : null
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Person',
     name: makerName,
     ...(account.bio ? { description: account.bio } : {}),
-    url: account.website_url || `${appUrl}/maker`,
+    url: account.website_url || `${APP_URL}/maker`,
     ...(avatarUrl ? { image: avatarUrl } : {}),
   }
 

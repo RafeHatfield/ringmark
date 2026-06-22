@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getWorkshopName } from '@/lib/utils'
 
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
@@ -15,8 +16,7 @@ export default async function OgImage() {
     .limit(1)
     .single()
 
-  const makerName =
-    account?.workshop_name || account?.display_name || account?.name || 'Ringmark'
+  const makerName = getWorkshopName(account)
   const bio = account?.bio ?? null
 
   let avatarUrl: string | null = null
