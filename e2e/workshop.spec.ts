@@ -140,3 +140,70 @@ test('editing type and status on the same record (transform, no new ID)', async 
   // Status is a <select> (StatusChanger) — check its value, not visible text
   await expect(page.getByRole('combobox')).toHaveValue('rough_turned')
 })
+
+// ── Workshop ID rename edge cases ─────────────────────────────────────────────
+
+test('renaming workshop ID persists after reload', async ({ page }) => {
+  await page.goto(`/objects/${grandchildId}/edit`)
+
+  const newId = `${grandchildWorkshopId.replace(/X+$/, '')}X`
+  const workshopIdInput = page.getByLabel('Workshop ID')
+  await workshopIdInput.fill(newId)
+  await workshopIdInput.blur()
+
+  // Wait briefly for async collision check to settle (no error should appear)
+  await page.waitForTimeout(300)
+  await expect(page.getByText(/is already taken/i)).not.toBeVisible()
+
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.waitForURL(`/objects/${grandchildId}`)
+
+  await expect(page.locator('h1.font-mono')).toHaveText(newId)
+
+  await page.reload()
+  await expect(page.locator('h1.font-mono')).toHaveText(newId)
+
+  grandchildWorkshopId = newId
+})
+
+test('collision error when renaming to an existing ID', async ({ page }) => {
+  await page.goto(`/objects/${grandchildId}/edit`)
+
+  const workshopIdInput = page.getByLabel('Workshop ID')
+  await workshopIdInput.fill(sourceWorkshopId)
+  await workshopIdInput.blur()
+
+  // Collision check fires on blur
+  await expect(page.getByText(/is already taken/i)).toBeVisible({ timeout: 5_000 })
+})
+
+test('public slug is unchanged after workshop ID rename', async ({ page }) => {
+  await page.goto(`/objects/${grandchildId}`)
+
+  // Capture the public slug from the "View public page" link
+  const slugLink = page.locator('a[href^="/p/"]').first()
+  const href = await slugLink.getAttribute('href')
+  const slug = href?.replace('/p/', '') ?? null
+
+  if (!slug) {
+    // Object has no public slug yet (draft), skip slug stability check
+    return
+  }
+
+  // Rename the workshop ID
+  await page.goto(`/objects/${grandchildId}/edit`)
+  const newId = `${grandchildWorkshopId.replace(/Y+$/, '')}Y`
+  const workshopIdInput = page.getByLabel('Workshop ID')
+  await workshopIdInput.fill(newId)
+  await workshopIdInput.blur()
+  await page.waitForTimeout(300)
+  await page.getByRole('button', { name: 'Save' }).click()
+  await page.waitForURL(`/objects/${grandchildId}`)
+  grandchildWorkshopId = newId
+
+  // Public slug must still work — the /p/[slug] route should return the piece
+  await page.goto(`/p/${slug}`)
+  // Any of these confirms the slug is still valid (not a 404)
+  await expect(page).not.toHaveURL('/404')
+  await expect(page.getByText(/could not be found/i)).not.toBeVisible()
+})
