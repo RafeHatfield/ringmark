@@ -87,7 +87,7 @@ test('anonymous user sees the public story page for a published object', async (
   const page = await ctx.newPage()
 
   await page.goto(`/p/${publishedSlug}`)
-  await expect(page.getByText('Public Page Test Object')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Public Page Test Object' })).toBeVisible()
   // Must NOT be redirected to admin
   await expect(page).not.toHaveURL(/\/objects\//)
 

@@ -51,6 +51,7 @@ export async function publishObject(objectId: string): Promise<{ error?: string 
 
   revalidatePath(`/objects/${objectId}`)
   revalidatePath(`/p/`, 'layout')
+  revalidatePath('/maker')
   return {}
 }
 

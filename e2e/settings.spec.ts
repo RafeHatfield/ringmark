@@ -1,15 +1,17 @@
 import { test, expect } from '@playwright/test'
 
-test.use({ storageState: 'e2e/.auth/user.json' })
-
-test.describe('settings page', () => {
-  test('requires auth — redirects to /login when unauthenticated', async ({ browser }) => {
-    const ctx = await browser.newContext()
+test.describe('settings page — unauthenticated', () => {
+  test('requires auth — redirects to /login', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: undefined })
     const page = await ctx.newPage()
     await page.goto('/settings')
     await expect(page).toHaveURL(/\/login/)
     await ctx.close()
   })
+})
+
+test.describe('settings page — authenticated', () => {
+  test.use({ storageState: 'e2e/.auth/user.json' })
 
   test('renders members section and invite button', async ({ page }) => {
     await page.goto('/settings')

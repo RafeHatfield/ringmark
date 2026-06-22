@@ -1,17 +1,20 @@
 import { test, expect } from '@playwright/test'
 
-test.use({ storageState: 'e2e/.auth/user.json' })
-
-test.describe('profile page', () => {
-  test('requires auth — redirects to /login when unauthenticated', async ({ browser }) => {
-    const ctx = await browser.newContext() // no storageState
+test.describe('profile page — unauthenticated', () => {
+  test('requires auth — redirects to /login', async ({ browser }) => {
+    // storageState: undefined overrides any file-level storageState on this context
+    const ctx = await browser.newContext({ storageState: undefined })
     const page = await ctx.newPage()
     await page.goto('/profile')
     await expect(page).toHaveURL(/\/login/)
     await ctx.close()
   })
+})
 
-  test('renders the profile form for authenticated user', async ({ page }) => {
+test.describe('profile page — authenticated', () => {
+  test.use({ storageState: 'e2e/.auth/user.json' })
+
+  test('renders the profile form', async ({ page }) => {
     await page.goto('/profile')
     await expect(page.getByRole('heading', { name: 'Profile' })).toBeVisible()
     await expect(page.locator('#display_name')).toBeVisible()

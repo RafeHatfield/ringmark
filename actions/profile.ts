@@ -32,4 +32,5 @@ export async function saveProfile(formData: FormData): Promise<{ error: string }
 
   revalidatePath('/profile')
   revalidatePath('/workshop')
+  revalidatePath('/maker')
 }

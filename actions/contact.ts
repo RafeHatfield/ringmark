@@ -2,8 +2,6 @@
 
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -31,9 +29,11 @@ export async function sendContactEmail(_prev: ContactResult | null, formData: Fo
     return { error: 'Please enter a valid email address.' }
   }
 
+  const apiKey = process.env.RESEND_API_KEY
   const to = process.env.CONTACT_EMAIL
-  if (!to) return { error: 'Contact form is not configured.' }
+  if (!apiKey || !to) return { error: 'Contact form is not configured.' }
 
+  const resend = new Resend(apiKey)
   const { error } = await resend.emails.send({
     from: 'Ringmark <hello@paceway.app>',
     to,
