@@ -26,7 +26,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import * as dotenv from 'dotenv'
+import fs from 'fs'
 import path from 'path'
 
 import type { Database } from '../lib/types'
@@ -35,17 +35,49 @@ import { suggestRootId, suggestDescendantId } from '../lib/id-gen'
 import { generateSlug } from '../lib/slug-gen'
 import { DEFAULT_CARE_INSTRUCTIONS } from '../lib/constants'
 
-dotenv.config({ path: path.join(process.cwd(), '.env.local') })
+// dotenv/dotenvx v17 prints "◇ injected env…" to stdout, which corrupts the
+// MCP stdio JSON-RPC channel. Parse .env.local manually and silently instead.
+function loadEnvFile(envPath: string) {
+  try {
+    for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const eq = trimmed.indexOf('=')
+      if (eq === -1) continue
+      const key = trimmed.slice(0, eq).trim()
+      let val = trimmed.slice(eq + 1).trim()
+      // Quoted value: strip surrounding quotes, no comment stripping inside quotes
+      if (val.length >= 2 && val[0] === val[val.length - 1] && (val[0] === '"' || val[0] === "'")) {
+        val = val.slice(1, -1)
+      } else {
+        // Unquoted value: strip inline # comments (e.g. KEY=value  # note)
+        const comment = val.indexOf(' #')
+        if (comment !== -1) val = val.slice(0, comment).trim()
+      }
+      if (!(key in process.env)) process.env[key] = val
+    }
+  } catch { /* .env.local absent — rely on env vars passed by the MCP host */ }
+}
+
+// __dirname is the mcp/ directory; .env.local lives one level up at the project root.
+// Using __dirname (not process.cwd()) makes the path work regardless of what directory
+// the MCP host (Claude Desktop) happens to set as the working directory.
+const ENV_PATH = path.join(__dirname, '..', '.env.local')
+loadEnvFile(ENV_PATH)
 
 // ── Supabase admin client ─────────────────────────────────────────────────────
 
 function makeClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.stderr.write(`[ringmark-mcp] __dirname=${__dirname}\n`)
+  process.stderr.write(`[ringmark-mcp] env path=${ENV_PATH} exists=${fs.existsSync(ENV_PATH)}\n`)
+  process.stderr.write(`[ringmark-mcp] url=${url ?? '(unset)'}\n`)
+  process.stderr.write(`[ringmark-mcp] key length=${key?.length ?? 0} starts-eyJ=${key?.startsWith('eyJ') ?? false}\n`)
   if (!url || !key) {
     throw new Error(
       'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — ' +
-      'ensure .env.local is present in the working directory'
+      `looked for .env.local at ${ENV_PATH}`
     )
   }
   return createClient<Database>(url, key, {
@@ -54,6 +86,12 @@ function makeClient() {
 }
 
 const db = makeClient()
+
+// Supabase errors are plain objects, not Error instances — String({}) → "[object Object]".
+// Wrap them so the MCP SDK can serialize a readable message.
+function pgErr(e: { message?: string } | null, fallback = 'Database error'): Error {
+  return new Error(e?.message ?? fallback)
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,7 +118,7 @@ async function resolveObject(identifier: string) {
       .select(OBJECT_SELECT)
       .eq('id', identifier)
       .maybeSingle()
-    if (error) throw error
+    if (error) throw pgErr(error)
     return data
   }
   const { data, error } = await db
@@ -88,7 +126,7 @@ async function resolveObject(identifier: string) {
     .select(OBJECT_SELECT)
     .ilike('workshop_id', identifier)
     .maybeSingle()
-  if (error) throw error
+  if (error) throw pgErr(error)
   return data
 }
 
@@ -127,7 +165,7 @@ server.tool(
     if (published === true) query = query.eq('is_published', true)
 
     const { data, error } = await query
-    if (error) throw error
+    if (error) throw pgErr(error)
     return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
   }
 )
@@ -159,7 +197,7 @@ server.tool(
       .or(`workshop_id.ilike.${q}%,title.ilike.%${q}%,species.ilike.%${q}%,public_title.ilike.%${q}%`)
       .order('updated_at', { ascending: false })
       .limit(15)
-    if (error) throw error
+    if (error) throw pgErr(error)
     return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
   }
 )
@@ -219,7 +257,7 @@ server.tool(
       .select('id, workshop_id, public_slug')
       .single()
 
-    if (error || !created) throw error ?? new Error('Failed to create object')
+    if (error || !created) throw error ? pgErr(error) : new Error('Failed to create object')
 
     await db.from('wood_objects').update({ root_id: created.id }).eq('id', created.id)
 
@@ -282,7 +320,7 @@ server.tool(
       .select('id, workshop_id, public_slug')
       .single()
 
-    if (error || !created) throw error ?? new Error('Failed to create child')
+    if (error || !created) throw error ? pgErr(error) : new Error('Failed to create child')
 
     return {
       content: [{
@@ -322,7 +360,7 @@ server.tool(
     }
 
     const { error } = await db.from('wood_objects').update(payload).eq('id', obj.id)
-    if (error) throw error
+    if (error) throw pgErr(error)
 
     return {
       content: [{ type: 'text' as const, text: `Updated ${obj.workshop_id} (${obj.id})` }],
@@ -362,7 +400,7 @@ server.tool(
     }
 
     const { error } = await db.from('wood_objects').update(payload).eq('id', obj.id)
-    if (error) throw error
+    if (error) throw pgErr(error)
 
     return {
       content: [{
@@ -390,7 +428,7 @@ server.tool(
       .from('wood_objects')
       .update({ is_published: published, updated_at: new Date().toISOString() })
       .eq('id', obj.id)
-    if (error) throw error
+    if (error) throw pgErr(error)
 
     return {
       content: [{
