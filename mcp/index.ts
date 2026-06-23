@@ -2,41 +2,30 @@
 /**
  * Ringmark MCP Server
  *
- * Exposes workshop objects as MCP tools so an LLM can create, update,
- * and publish pieces on your behalf during your woodworking process.
+ * Exposes workshop objects as MCP tools via the Ringmark REST API.
+ * Requires RINGMARK_API_KEY in .env.local (or passed via env).
+ * Set RINGMARK_API_URL to override the default http://localhost:3000.
  *
- * Run directly:
- *   npx tsx mcp/index.ts
- *
- * Claude Desktop config (~/.config/claude/claude_desktop_config.json):
+ * Claude Desktop config:
  *   {
  *     "mcpServers": {
  *       "ringmark": {
- *         "command": "npx",
- *         "args": ["tsx", "/absolute/path/to/ringmark/mcp/index.ts"],
- *         "cwd": "/absolute/path/to/ringmark"
+ *         "command": "/path/to/ringmark/node_modules/.bin/tsx",
+ *         "args": ["/path/to/ringmark/mcp/index.ts"],
+ *         "cwd": "/path/to/ringmark"
  *       }
  *     }
  *   }
- *
- * Credentials are read from the project's .env.local (via cwd above).
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import fs from 'fs'
 import path from 'path'
 
-import type { Database } from '../lib/types'
-import type { ObjectType, ObjectStatus } from '../lib/types'
-import { suggestRootId, suggestDescendantId } from '../lib/id-gen'
-import { generateSlug } from '../lib/slug-gen'
-import { DEFAULT_CARE_INSTRUCTIONS } from '../lib/constants'
-
-// dotenv/dotenvx v17 prints "◇ injected env…" to stdout, which corrupts the
-// MCP stdio JSON-RPC channel. Parse .env.local manually and silently instead.
+// dotenv/dotenvx v17 prints to stdout, corrupting the stdio JSON-RPC channel.
+// Parse .env.local manually and silently instead.
 function loadEnvFile(envPath: string) {
   try {
     for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
@@ -46,95 +35,49 @@ function loadEnvFile(envPath: string) {
       if (eq === -1) continue
       const key = trimmed.slice(0, eq).trim()
       let val = trimmed.slice(eq + 1).trim()
-      // Quoted value: strip surrounding quotes, no comment stripping inside quotes
       if (val.length >= 2 && val[0] === val[val.length - 1] && (val[0] === '"' || val[0] === "'")) {
         val = val.slice(1, -1)
       } else {
-        // Unquoted value: strip inline # comments (e.g. KEY=value  # note)
         const comment = val.indexOf(' #')
         if (comment !== -1) val = val.slice(0, comment).trim()
       }
       if (!(key in process.env)) process.env[key] = val
     }
-  } catch { /* .env.local absent — rely on env vars passed by the MCP host */ }
+  } catch { /* .env.local absent — rely on env vars from MCP host */ }
 }
 
-// __dirname is the mcp/ directory; .env.local lives one level up at the project root.
-// Using __dirname (not process.cwd()) makes the path work regardless of what directory
-// the MCP host (Claude Desktop) happens to set as the working directory.
-const ENV_PATH = path.join(__dirname, '..', '.env.local')
-loadEnvFile(ENV_PATH)
+// __dirname is mcp/; .env.local lives one level up.
+// Using __dirname (not process.cwd()) works regardless of the host's working directory.
+loadEnvFile(path.join(__dirname, '..', '.env.local'))
 
-// ── Supabase admin client ─────────────────────────────────────────────────────
+// ── API client ────────────────────────────────────────────────────────────────
 
-function makeClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  process.stderr.write(`[ringmark-mcp] __dirname=${__dirname}\n`)
-  process.stderr.write(`[ringmark-mcp] env path=${ENV_PATH} exists=${fs.existsSync(ENV_PATH)}\n`)
-  process.stderr.write(`[ringmark-mcp] url=${url ?? '(unset)'}\n`)
-  process.stderr.write(`[ringmark-mcp] key length=${key?.length ?? 0} starts-eyJ=${key?.startsWith('eyJ') ?? false}\n`)
-  if (!url || !key) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — ' +
-      `looked for .env.local at ${ENV_PATH}`
-    )
-  }
-  return createClient<Database>(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
+const API_KEY = process.env.RINGMARK_API_KEY
+const API_BASE = (process.env.RINGMARK_API_URL ?? 'http://localhost:3000').replace(/\/$/, '') + '/api/v1'
+
+if (!API_KEY) {
+  process.stderr.write('[ringmark-mcp] Missing RINGMARK_API_KEY in .env.local\n')
+  process.exit(1)
+}
+
+async function api(method: string, endpoint: string, body?: Record<string, unknown>): Promise<unknown> {
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+  if (res.status === 204) return null
+  const json = await res.json() as { error?: string }
+  if (!res.ok) throw new Error(json?.error ?? `API error ${res.status}`)
+  return json
 }
-
-const db = makeClient()
-
-// Supabase errors are plain objects, not Error instances — String({}) → "[object Object]".
-// Wrap them so the MCP SDK can serialize a readable message.
-function pgErr(e: { message?: string } | null, fallback = 'Database error'): Error {
-  return new Error(e?.message ?? fallback)
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function getAccount() {
-  const { data, error } = await db
-    .from('accounts')
-    .select('id, default_prefix, name')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (error || !data) throw new Error('No account found in database')
-  return data
-}
-
-const OBJECT_SELECT =
-  'id, workshop_id, object_type, status, title, species, public_slug, public_title, public_story, public_notes, public_care, location_text, private_notes, is_published, parent_id, root_id, account_id, created_at, updated_at' as const
-
-/** Resolve a workshop ID (e.g. "RH1", "RH1-2") or UUID to a full row. */
-async function resolveObject(identifier: string) {
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(identifier)
-  if (isUuid) {
-    const { data, error } = await db
-      .from('wood_objects')
-      .select(OBJECT_SELECT)
-      .eq('id', identifier)
-      .maybeSingle()
-    if (error) throw pgErr(error)
-    return data
-  }
-  const { data, error } = await db
-    .from('wood_objects')
-    .select(OBJECT_SELECT)
-    .ilike('workshop_id', identifier)
-    .maybeSingle()
-  if (error) throw pgErr(error)
-  return data
-}
-
-type ResolvedObject = NonNullable<Awaited<ReturnType<typeof resolveObject>>>
 
 // ── MCP server ────────────────────────────────────────────────────────────────
 
-const server = new McpServer({ name: 'ringmark', version: '0.1.0' })
+const server = new McpServer({ name: 'ringmark', version: '0.2.0' })
 
 // ── list_objects ──────────────────────────────────────────────────────────────
 
@@ -154,18 +97,12 @@ server.tool(
     published: z.boolean().optional().describe('If true, return only published objects'),
   },
   async ({ limit, object_type, status, published }) => {
-    let query = db
-      .from('wood_objects')
-      .select('id, workshop_id, object_type, status, title, species, is_published, updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(limit ?? 20)
-
-    if (object_type) query = query.eq('object_type', object_type as ObjectType)
-    if (status) query = query.eq('status', status as ObjectStatus)
-    if (published === true) query = query.eq('is_published', true)
-
-    const { data, error } = await query
-    if (error) throw pgErr(error)
+    const params = new URLSearchParams()
+    params.set('limit', String(limit ?? 20))
+    if (object_type) params.set('type', object_type)
+    if (status) params.set('status', status)
+    if (published !== undefined) params.set('published', String(published))
+    const data = await api('GET', `/objects?${params}`)
     return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
   }
 )
@@ -177,9 +114,16 @@ server.tool(
   'Get full details of a single object by its workshop ID (e.g. "RH1") or UUID.',
   { id: z.string().describe('Workshop ID (e.g. RH1, RH1-2) or UUID') },
   async ({ id }) => {
-    const obj = await resolveObject(id)
-    if (!obj) return { content: [{ type: 'text' as const, text: `No object found: ${id}` }] }
-    return { content: [{ type: 'text' as const, text: JSON.stringify(obj, null, 2) }] }
+    try {
+      const data = await api('GET', `/objects/${encodeURIComponent(id)}`)
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.toLowerCase().includes('not found')) {
+        return { content: [{ type: 'text' as const, text: `No object found: ${id}` }] }
+      }
+      throw err
+    }
   }
 )
 
@@ -190,14 +134,7 @@ server.tool(
   'Search objects by title keyword, species, workshop ID, or public title.',
   { query: z.string().describe('Search term') },
   async ({ query }) => {
-    const q = query.trim()
-    const { data, error } = await db
-      .from('wood_objects')
-      .select('id, workshop_id, object_type, status, title, species, is_published, updated_at')
-      .or(`workshop_id.ilike.${q}%,title.ilike.%${q}%,species.ilike.%${q}%,public_title.ilike.%${q}%`)
-      .order('updated_at', { ascending: false })
-      .limit(15)
-    if (error) throw pgErr(error)
+    const data = await api('GET', `/objects?q=${encodeURIComponent(query.trim())}`)
     return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
   }
 )
@@ -217,50 +154,20 @@ server.tool(
     ),
     title: z.string().optional().describe('Internal working title / description'),
     species: z.string().optional().describe('Wood species (e.g. Bigleaf Maple, Red Cedar Burl)'),
-    status: z.string().default('acquired').describe('Initial status (default: acquired)'),
+    status: z.string().optional().describe('Initial status (default: acquired)'),
     location_text: z.string().optional().describe('Where the wood came from — stays private'),
     private_notes: z.string().optional().describe('Private workshop notes'),
   },
   async ({ object_type, workshop_id, title, species, status, location_text, private_notes }) => {
-    const account = await getAccount()
+    const body: Record<string, unknown> = { object_type }
+    if (workshop_id) body.workshop_id = workshop_id
+    if (title) body.title = title
+    if (species) body.species = species
+    if (status) body.status = status
+    if (location_text) body.location_text = location_text
+    if (private_notes) body.private_notes = private_notes
 
-    const wid = workshop_id
-      ? workshop_id.toUpperCase().trim()
-      : await suggestRootId(db, account.id, account.default_prefix)
-
-    const { data: collision } = await db
-      .from('wood_objects')
-      .select('id')
-      .eq('account_id', account.id)
-      .eq('workshop_id_lower', wid.toLowerCase())
-      .maybeSingle()
-    if (collision) throw new Error(`Workshop ID "${wid}" is already taken`)
-
-    const slug = await generateSlug(db)
-
-    const { data: created, error } = await db
-      .from('wood_objects')
-      .insert({
-        account_id: account.id,
-        workshop_id: wid,
-        workshop_id_lower: wid.toLowerCase(),
-        public_slug: slug,
-        object_type: (object_type ?? 'source') as ObjectType,
-        parent_id: null,
-        root_id: null,
-        title: title?.trim() || null,
-        species: species?.trim() || null,
-        status: (status ?? 'acquired') as ObjectStatus,
-        location_text: location_text?.trim() || null,
-        private_notes: private_notes?.trim() || null,
-      })
-      .select('id, workshop_id, public_slug')
-      .single()
-
-    if (error || !created) throw error ? pgErr(error) : new Error('Failed to create object')
-
-    await db.from('wood_objects').update({ root_id: created.id }).eq('id', created.id)
-
+    const created = await api('POST', '/objects', body) as { workshop_id: string; id: string; public_slug: string }
     return {
       content: [{
         type: 'text' as const,
@@ -287,45 +194,19 @@ server.tool(
     private_notes: z.string().optional(),
   },
   async ({ parent_id, object_type, title, species, status, private_notes }) => {
-    const parent = await resolveObject(parent_id) as ResolvedObject | null
-    if (!parent) throw new Error(`Parent not found: ${parent_id}`)
+    const body: Record<string, unknown> = { object_type }
+    if (title) body.title = title
+    if (species) body.species = species
+    if (status) body.status = status
+    if (private_notes) body.private_notes = private_notes
 
-    const rootId = parent.root_id ?? parent.id
-
-    const { data: root } = await db
-      .from('wood_objects')
-      .select('workshop_id')
-      .eq('id', rootId)
-      .single()
-    const rootWorkshopId = root?.workshop_id ?? parent.workshop_id
-
-    const wid = await suggestDescendantId(db, parent.account_id, rootId, rootWorkshopId)
-    const slug = await generateSlug(db)
-
-    const { data: created, error } = await db
-      .from('wood_objects')
-      .insert({
-        account_id: parent.account_id,
-        workshop_id: wid,
-        workshop_id_lower: wid.toLowerCase(),
-        public_slug: slug,
-        object_type: object_type as ObjectType,
-        parent_id: parent.id,
-        root_id: rootId,
-        title: title?.trim() || null,
-        species: species?.trim() || parent.species,
-        status: (status ?? null) as ObjectStatus | null,
-        private_notes: private_notes?.trim() || null,
-      })
-      .select('id, workshop_id, public_slug')
-      .single()
-
-    if (error || !created) throw error ? pgErr(error) : new Error('Failed to create child')
-
+    const created = await api('POST', `/objects/${encodeURIComponent(parent_id)}/children`, body) as {
+      workshop_id: string; id: string
+    }
     return {
       content: [{
         type: 'text' as const,
-        text: `Created child: ${created.workshop_id} (parent: ${parent.workshop_id})\nID: ${created.id}`,
+        text: `Created child: ${created.workshop_id} (parent: ${parent_id})\nID: ${created.id}`,
       }],
     }
   }
@@ -346,24 +227,19 @@ server.tool(
     private_notes: z.string().optional(),
   },
   async ({ id, object_type, status, title, species, location_text, private_notes }) => {
-    const obj = await resolveObject(id)
-    if (!obj) throw new Error(`Object not found: ${id}`)
+    const body: Record<string, unknown> = {}
+    if (object_type !== undefined) body.object_type = object_type
+    if (status !== undefined) body.status = status
+    if (title !== undefined) body.title = title
+    if (species !== undefined) body.species = species
+    if (location_text !== undefined) body.location_text = location_text
+    if (private_notes !== undefined) body.private_notes = private_notes
 
-    const payload = {
-      ...(object_type !== undefined && { object_type: object_type as ObjectType }),
-      ...(status !== undefined && { status: status as ObjectStatus }),
-      ...(title !== undefined && { title: title?.trim() || null }),
-      ...(species !== undefined && { species: species?.trim() || null }),
-      ...(location_text !== undefined && { location_text: location_text?.trim() || null }),
-      ...(private_notes !== undefined && { private_notes: private_notes?.trim() || null }),
-      updated_at: new Date().toISOString(),
+    const updated = await api('PATCH', `/objects/${encodeURIComponent(id)}`, body) as {
+      workshop_id: string; id: string
     }
-
-    const { error } = await db.from('wood_objects').update(payload).eq('id', obj.id)
-    if (error) throw pgErr(error)
-
     return {
-      content: [{ type: 'text' as const, text: `Updated ${obj.workshop_id} (${obj.id})` }],
+      content: [{ type: 'text' as const, text: `Updated ${updated.workshop_id} (${updated.id})` }],
     }
   }
 )
@@ -383,29 +259,22 @@ server.tool(
     public_notes: z.string().optional().describe(
       'Species, dimensions, finish — anything buyers should know'
     ),
-    public_care: z.string().optional().describe(
-      'Care instructions. Standard text is used if omitted.'
-    ),
+    public_care: z.string().optional().describe('Care instructions'),
   },
   async ({ id, public_title, public_story, public_notes, public_care }) => {
-    const obj = await resolveObject(id)
-    if (!obj) throw new Error(`Object not found: ${id}`)
+    const body: Record<string, unknown> = {}
+    if (public_title !== undefined) body.public_title = public_title
+    if (public_story !== undefined) body.public_story = public_story
+    if (public_notes !== undefined) body.public_notes = public_notes
+    if (public_care !== undefined) body.public_care = public_care
 
-    const payload = {
-      ...(public_title !== undefined && { public_title: public_title?.trim() || null }),
-      ...(public_story !== undefined && { public_story: public_story?.trim() || null }),
-      ...(public_notes !== undefined && { public_notes: public_notes?.trim() || null }),
-      public_care: public_care?.trim() || obj.public_care || DEFAULT_CARE_INSTRUCTIONS,
-      updated_at: new Date().toISOString(),
+    const updated = await api('PATCH', `/objects/${encodeURIComponent(id)}`, body) as {
+      workshop_id: string; public_slug: string
     }
-
-    const { error } = await db.from('wood_objects').update(payload).eq('id', obj.id)
-    if (error) throw pgErr(error)
-
     return {
       content: [{
         type: 'text' as const,
-        text: `Story saved for ${obj.workshop_id}. Public URL once published: /p/${obj.public_slug}`,
+        text: `Story saved for ${updated.workshop_id}. Public URL once published: /p/${updated.public_slug}`,
       }],
     }
   }
@@ -421,21 +290,15 @@ server.tool(
     published: z.boolean().default(true).describe('true to publish, false to unpublish'),
   },
   async ({ id, published }) => {
-    const obj = await resolveObject(id)
-    if (!obj) throw new Error(`Object not found: ${id}`)
-
-    const { error } = await db
-      .from('wood_objects')
-      .update({ is_published: published, updated_at: new Date().toISOString() })
-      .eq('id', obj.id)
-    if (error) throw pgErr(error)
-
+    const updated = await api('PATCH', `/objects/${encodeURIComponent(id)}`, { is_published: published }) as {
+      workshop_id: string; public_slug: string
+    }
     return {
       content: [{
         type: 'text' as const,
         text: published
-          ? `Published ${obj.workshop_id}. Public URL: /p/${obj.public_slug}`
-          : `Unpublished ${obj.workshop_id}.`,
+          ? `Published ${updated.workshop_id}. Public URL: /p/${updated.public_slug}`
+          : `Unpublished ${updated.workshop_id}.`,
       }],
     }
   }
