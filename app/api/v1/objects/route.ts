@@ -1,46 +1,11 @@
-import { z } from 'zod'
 import { verifyApiKey } from '@/lib/api-auth'
-import { createServiceClient } from '@/lib/supabase/service'
+import { createServiceClient, getAccount } from '@/lib/supabase/service'
+import { CreateObjectSchema } from '@/lib/api-schemas'
 import { suggestRootId } from '@/lib/id-gen'
 import { generateSlug } from '@/lib/slug-gen'
 import type { ObjectType, ObjectStatus } from '@/lib/types'
 
-// ── Zod schemas ───────────────────────────────────────────────────────────────
-
-const objectTypeValues = [
-  'source', 'log', 'chunk', 'slab', 'blank', 'rough_bowl',
-  'finished_bowl', 'pen_blank', 'spindle_blank', 'offcut', 'other',
-] as const
-
-const objectStatusValues = [
-  'unknown', 'acquired', 'stored', 'sealed', 'cut', 'drying',
-  'rough_turned', 'finished', 'for_sale', 'sold', 'gifted', 'scrapped',
-] as const
-
-const createSchema = z.object({
-  object_type: z.enum(objectTypeValues).optional().default('source'),
-  workshop_id: z.string().optional(),
-  title: z.string().optional(),
-  species: z.string().optional(),
-  status: z.enum(objectStatusValues).optional().default('acquired'),
-  location_text: z.string().optional(),
-  private_notes: z.string().optional(),
-})
-
-// ── Account helper ────────────────────────────────────────────────────────────
-
-async function getAccount(db: ReturnType<typeof createServiceClient>) {
-  const { data, error } = await db
-    .from('accounts')
-    .select('id, default_prefix')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (error || !data) {
-    throw new Error('No account found in database')
-  }
-  return data
-}
+const createSchema = CreateObjectSchema
 
 // ── GET /api/v1/objects ───────────────────────────────────────────────────────
 

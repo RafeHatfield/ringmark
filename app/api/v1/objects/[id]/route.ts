@@ -1,48 +1,10 @@
-import { z } from 'zod'
 import { verifyApiKey } from '@/lib/api-auth'
-import { createServiceClient } from '@/lib/supabase/service'
+import { createServiceClient, getAccount } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
+import { PatchObjectSchema } from '@/lib/api-schemas'
 import type { WoodObjectUpdate } from '@/lib/types'
 
-// ── Zod schema ────────────────────────────────────────────────────────────────
-
-const objectTypeValues = [
-  'source', 'log', 'chunk', 'slab', 'blank', 'rough_bowl',
-  'finished_bowl', 'pen_blank', 'spindle_blank', 'offcut', 'other',
-] as const
-
-const objectStatusValues = [
-  'unknown', 'acquired', 'stored', 'sealed', 'cut', 'drying',
-  'rough_turned', 'finished', 'for_sale', 'sold', 'gifted', 'scrapped',
-] as const
-
-const patchSchema = z.object({
-  object_type: z.enum(objectTypeValues).optional(),
-  status: z.enum(objectStatusValues).optional(),
-  title: z.string().optional(),
-  species: z.string().optional(),
-  location_text: z.string().optional(),
-  private_notes: z.string().optional(),
-  public_title: z.string().optional(),
-  public_story: z.string().optional(),
-  public_notes: z.string().optional(),
-  public_care: z.string().optional(),
-  is_published: z.boolean().optional(),
-  // Explicitly excluded: public_slug, account_id, workshop_id, workshop_id_lower
-})
-
-// ── Account helper ────────────────────────────────────────────────────────────
-
-async function getAccount(db: ReturnType<typeof createServiceClient>) {
-  const { data, error } = await db
-    .from('accounts')
-    .select('id')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (error || !data) throw new Error('No account found in database')
-  return data
-}
+const patchSchema = PatchObjectSchema
 
 // ── GET /api/v1/objects/:id ───────────────────────────────────────────────────
 
