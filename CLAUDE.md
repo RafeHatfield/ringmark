@@ -50,16 +50,45 @@ See `ringmark-project-spec.md` for full product specification. The spec is the s
 /p/[slug]                   Public story page (no auth required — server-side auth decision)
 ```
 
+### REST API
+
+The REST API lives at `app/api/v1/` and is separate from the admin routes and server actions. It is designed for LLM/MCP clients and future integrations.
+
+**Authentication:** All object endpoints require `Authorization: Bearer <RINGMARK_API_KEY>`. The key is stored in the `RINGMARK_API_KEY` environment variable. Comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
+
+**Endpoints:**
+```
+GET    /api/v1/objects              List objects; filter by type, status, published; search with ?q
+POST   /api/v1/objects              Create root object (auto ID + slug if not provided)
+GET    /api/v1/objects/:id          Get single object (UUID or workshop ID accepted)
+PATCH  /api/v1/objects/:id          Partial update; whitelisted fields only; is_published toggles publish state
+DELETE /api/v1/objects/:id          Delete object (children cascade)
+POST   /api/v1/objects/:id/children Add child with auto flat-numbered workshop ID
+GET    /api/v1/openapi.json         OpenAPI 3.1 spec (no auth)
+GET    /api/v1/docs                 Swagger UI (no auth)
+```
+
+**Self-documenting:** `lib/api-schemas.ts` is the single source of truth. Zod schemas annotated with `.openapi()` drive both request validation and the generated OpenAPI spec (`lib/api-spec.ts`). If you add an endpoint, add the route and register it in `api-spec.ts`.
+
+**Service client:** API routes use `createServiceClient()` (service role, bypasses RLS) scoped to the account via `getAccount()`. RLS is not the auth boundary here — `verifyApiKey()` and account scoping are.
+
 ### Key Directories
 ```
 app/                        Next.js App Router routes
 app/(admin)/                Auth-gated admin routes
+app/api/v1/                 REST API routes (objects, children, openapi.json, docs)
 app/p/                      Public story route
 components/                 React components (ui/ for shadcn, rest are project-specific)
 lib/                        Utilities (supabase/, id-gen.ts, slug-gen.ts, types.ts, constants.ts)
+lib/api-schemas.ts          Zod schemas — single source of truth for validation + OpenAPI spec
+lib/api-spec.ts             OpenAPI 3.1 spec generator (generateSpec())
+lib/api-auth.ts             verifyApiKey() with timing-safe comparison
+lib/resolve-object.ts       resolveObject() — UUID or workshop ID lookup scoped to account
+lib/supabase/service.ts     createServiceClient() + getAccount() for API routes
 actions/                    Server actions (objects.ts, photos.ts, story.ts)
 supabase/migrations/        SQL migrations (run via Supabase CLI)
 tasks/                      Agent task coordination files
+docs/                       Developer-facing reference docs (api.md, QA.md)
 ```
 
 ### Server/Client Boundary
@@ -94,6 +123,9 @@ supabase migration new <name>
 
 # Lint
 npm run lint
+
+# API tests (Playwright against live dev server)
+npm run test:api
 ```
 
 ---
@@ -114,6 +146,8 @@ npm run lint
 - **Don't over-engineer.** Minimum complexity for the current task. The spec calls out specific non-goals — respect them.
 - **Read before writing.** Understand existing patterns before modifying.
 - **Security over convenience.** When in doubt, verify server-side rather than trusting client state.
+- **New external-facing features go through the API layer.** Data operations that will be consumed by external clients (LLM/MCP, integrations) should be exposed via the REST API in `app/api/v1/`, not only through server actions.
+- **`public_slug` is immutable.** It is never accepted in a PATCH body — the Zod whitelist in `PatchObjectSchema` enforces this. If you ever see `public_slug` in a write payload, that is a bug.
 
 ### Testing
 - **Unit test pure logic:** `lib/id-gen.ts` and `lib/slug-gen.ts` are deterministic and testable without a database.
