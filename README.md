@@ -45,6 +45,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page |
 | `SUPABASE_SERVICE_ROLE_KEY` | Same page — server-side only, never exposed to the browser |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` locally, `https://ringmark.org` in production |
+| `RINGMARK_API_KEY` | Generate any long random hex string — used to authenticate REST API and MCP calls |
 
 ### Creating your auth user (local)
 
@@ -54,6 +55,82 @@ UPDATE auth.users
 SET encrypted_password = extensions.crypt('YourPassword', extensions.gen_salt('bf', 12))
 WHERE email = 'your@email.com';
 ```
+
+---
+
+## REST API
+
+The REST API at `/api/v1/` provides programmatic access to workshop data. It is the integration layer for LLM tools, the MCP server, and any future client.
+
+**Base URL:** `http://localhost:3000` (dev) · `https://ringmark.org` (production)
+
+**Auth:** Bearer token in every request:
+
+```bash
+curl http://localhost:3000/api/v1/objects \
+  -H "Authorization: Bearer $RINGMARK_API_KEY"
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/objects` | List objects; filter with `?q`, `?type`, `?status`, `?published`, `?limit`, `?offset` |
+| `POST` | `/api/v1/objects` | Create root object; workshop ID + slug auto-generated if omitted |
+| `GET` | `/api/v1/objects/:id` | Fetch single object by UUID or workshop ID (case-insensitive) |
+| `PATCH` | `/api/v1/objects/:id` | Partial update; whitelisted fields only — `public_slug` is never accepted |
+| `DELETE` | `/api/v1/objects/:id` | Delete object (children cascade) |
+| `POST` | `/api/v1/objects/:id/children` | Add child with auto flat-numbered workshop ID |
+
+### Interactive docs
+
+The API is self-documenting via OpenAPI 3.1:
+
+- **Swagger UI** — [`/api/v1/docs`](http://localhost:3000/api/v1/docs) — try every endpoint in the browser
+- **OpenAPI JSON** — [`/api/v1/openapi.json`](http://localhost:3000/api/v1/openapi.json) — import into Postman, Insomnia, or any OpenAPI tooling
+
+Both endpoints are public (no auth required). The spec is generated at runtime from `lib/api-schemas.ts`, so it is always in sync with the code.
+
+Full reference with curl examples: [`docs/api.md`](docs/api.md)
+
+---
+
+## MCP server
+
+Ringmark ships an MCP server that exposes the REST API as tools for LLM assistants (Claude Desktop, etc.).
+
+### Available tools
+
+| Tool | What it does |
+|------|-------------|
+| `list_objects` | List recent workshop objects with optional type/status/published filters |
+| `search_objects` | Search by title, species, workshop ID, or public title |
+| `get_object` | Fetch full details by workshop ID or UUID |
+| `create_object` | Create a new root object (workshop ID auto-assigned) |
+| `add_child` | Create a child object with flat descendant ID (e.g. `RH1` → `RH1-1`) |
+| `update_object` | Update object fields |
+| `save_story` | Set public title, narrative, notes, and care instructions |
+| `publish_object` | Publish or unpublish an object |
+
+### Claude Desktop setup
+
+The MCP server requires the dev server (or a production deploy) to be running — it calls the REST API via HTTP.
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "ringmark": {
+      "command": "/path/to/ringmark/node_modules/.bin/tsx",
+      "args": ["/path/to/ringmark/mcp/index.ts"],
+      "cwd": "/path/to/ringmark"
+    }
+  }
+}
+```
+
+`RINGMARK_API_KEY` and `RINGMARK_API_URL` are loaded from `.env.local`. Set `RINGMARK_API_URL` to the production URL to use a deployed instance instead of localhost.
 
 ---
 
@@ -74,9 +151,9 @@ These cover: workshop ID generation, slug generation, lineage derivation, every 
 Requires local Supabase and the dev server running.
 
 ```bash
-supabase start     # terminal 1
-npm run dev        # terminal 2
-npm run test:e2e   # terminal 3
+supabase start      # terminal 1
+npm run dev         # terminal 2
+npm run test:e2e    # terminal 3
 ```
 
 Playwright creates a dedicated `e2e@ringmark.local` test user via the Supabase admin API and cleans up all test data after the run. Your real data is never touched.
@@ -86,19 +163,28 @@ npm run test:e2e:ui   # interactive Playwright UI
 npm run test:all      # unit + security + E2E in sequence
 ```
 
+### API integration tests
+
+```bash
+npm run test:api   # Playwright against the running dev server
+```
+
+58 tests covering auth, CRUD, search/filter, children, OpenAPI spec, and Swagger UI.
+
 | Suite | What it covers |
 |---|---|
-| `auth.spec.ts` | Unauthenticated redirects, wrong password, correct login, already-logged-in redirect, sign-out, non-owner access |
+| `auth.spec.ts` | Unauthenticated redirects, wrong password, correct login, sign-out, non-owner access |
 | `workshop.spec.ts` | Source creation, child/grandchild lineage, flat ID invariant, type/status transforms |
 | `story.spec.ts` | Story draft + save, publish/unpublish, round-trip persistence, private_notes leak check |
-| `public-page.spec.ts` | Owner redirect to admin, anonymous public page, unpublished placeholder, all private field canaries, unknown slug |
+| `public-page.spec.ts` | Owner redirect to admin, anonymous public page, unpublished placeholder, private field canaries, unknown slug |
 | `search.spec.ts` | Exact ID, child ID, title keyword, empty state |
 | `delete.spec.ts` | Two-tap confirmation, Cancel, deletion confirmed in search and direct URL |
 | `photos.spec.ts` | Photo visibility toggle verified on public page (both directions) |
+| `api.spec.ts` | Auth, list/search/filter, create, get, patch, delete, children, OpenAPI endpoints |
 
 ### CI
 
-GitHub Actions runs on every push to `main`: unit tests → type check → lint. E2E tests run locally only (Supabase-in-CI reliability is not yet worth the overhead for a single-user project).
+GitHub Actions runs on every push to `main`: unit tests → type check → lint.
 
 ---
 
@@ -121,6 +207,7 @@ npm run dev          # dev server (localhost:3000)
 npm run build        # production build check
 npm run lint         # ESLint
 npx tsc --noEmit     # TypeScript check
+npm run mcp          # run MCP server directly (for debugging)
 ```
 
 ---
@@ -137,6 +224,10 @@ npx tsc --noEmit     # TypeScript check
 /objects/[id]/story         Edit public story + publish/unpublish
 /objects/[id]/qr            QR card + download
 /p/[slug]                   Public story page (no auth required)
+/maker                      Public maker page — published pieces
+/api/v1/                    REST API (see above)
+/api/v1/docs                Swagger UI
+/api/v1/openapi.json        OpenAPI 3.1 spec
 ```
 
 ---
@@ -148,3 +239,4 @@ npx tsc --noEmit     # TypeScript check
 3. Public page queries select only explicitly public fields — `private_notes`, `location_text`, and `workshop_id` are never included.
 4. RLS policies are a second layer, not the only layer.
 5. Private photo storage paths are never included in public responses.
+6. REST API endpoints use `crypto.timingSafeEqual` for key comparison and scope all queries to the account — the service role client is never exposed beyond the route handler.
