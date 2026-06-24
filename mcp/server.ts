@@ -218,7 +218,10 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
 
   server.tool(
     'update_object',
-    'Update fields on an existing object. Only pass fields you want to change.',
+    'Update internal fields on an existing object. Only pass fields you want to change.\n\n' +
+    'This tool handles: object_type, status, title, species, location_text, private_notes.\n' +
+    'It does NOT handle public-facing fields (public_title, public_story, public_notes, public_care) — ' +
+    'use save_story for those. It does NOT toggle publish state — use publish_object for that.',
     {
       id: z.string().describe('Workshop ID or UUID'),
       object_type: z.string().optional(),
@@ -364,10 +367,20 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
         // Path on the MCP server host (the user's local machine under Claude Desktop).
         try {
           fileBuffer = readFileSync(file_path)
-        } catch {
+        } catch (err: unknown) {
+          const code = (err as NodeJS.ErrnoException).code
+          if (code === 'EACCES' || code === 'EPERM') {
+            throw new Error(
+              `Permission denied reading file: ${file_path}\n` +
+              'On macOS, this is usually TCC (Transparency, Consent, Control) blocking access to ~/Downloads or ~/Desktop. ' +
+              'Grant Full Disk Access to the terminal/Claude Desktop app in System Settings → Privacy & Security → Full Disk Access, ' +
+              'or move the file to a location the app can read (e.g. /tmp).\n' +
+              'Alternatively, use image_url if the image is accessible at a URL.'
+            )
+          }
           throw new Error(
-            `Cannot read file: ${file_path}\n` +
-            'Ensure this path exists on the machine running the MCP server. ' +
+            `File not found: ${file_path}\n` +
+            'Ensure this path exists on the machine running the MCP server and the extension is included (e.g. .jpg, .jpeg, .png). ' +
             'If the image is at a URL (iCloud link, Google Photos, etc.) use image_url instead.'
           )
         }

@@ -108,9 +108,10 @@ Ringmark ships an MCP server that exposes the REST API as tools for LLM assistan
 | `get_object` | Fetch full details by workshop ID or UUID |
 | `create_object` | Create a new root object (workshop ID auto-assigned) |
 | `add_child` | Create a child object with flat descendant ID (e.g. `RH1` → `RH1-1`) |
-| `update_object` | Update object fields |
+| `update_object` | Update internal fields (`title`, `species`, `status`, etc.) — use `save_story` for `public_*` fields |
 | `save_story` | Set public title, narrative, notes, and care instructions |
 | `publish_object` | Publish or unpublish an object |
+| `upload_photo` | Upload a photo via local file path, public URL, or base64 |
 
 ### Claude Desktop setup
 

@@ -12,7 +12,7 @@
 
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync, unlinkSync } from 'fs'
+import { writeFileSync, unlinkSync, chmodSync } from 'fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -76,6 +76,22 @@ describe('ringmark MCP server — manifest', () => {
       for (const tool of tools) {
         assert.ok(tool.description?.length, `${tool.name} is missing a description`)
       }
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('update_object description directs to save_story for public_* fields', async () => {
+    const { client, cleanup } = await connectPair()
+    try {
+      const { tools } = await client.listTools()
+      const updateObj = tools.find(t => t.name === 'update_object')
+      assert.ok(updateObj, 'update_object tool not found')
+      const desc = updateObj.description ?? ''
+      assert.ok(
+        desc.includes('save_story'),
+        `update_object description should mention save_story for public_* fields, got: ${desc}`
+      )
     } finally {
       await cleanup()
     }
@@ -447,7 +463,7 @@ describe('ringmark MCP server — upload_photo', () => {
     }
   })
 
-  it('nonexistent file returns an error without calling the API', async () => {
+  it('nonexistent file returns a "File not found" error without calling the API', async () => {
     let fetchCalled = false
     const original = global.fetch
     global.fetch = async () => { fetchCalled = true; return Response.json({}) }
@@ -459,8 +475,36 @@ describe('ringmark MCP server — upload_photo', () => {
       })
       assert.ok(result.isError, 'expected isError: true for a missing file')
       assert.ok(!fetchCalled, 'fetch should not be called when file cannot be read')
-      assert.ok(textOf(result).includes('Cannot read file'), `expected file error, got: ${textOf(result)}`)
+      assert.ok(textOf(result).includes('File not found'), `expected file-not-found error, got: ${textOf(result)}`)
     } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('permission-denied file surfaces a TCC/permissions error without calling the API', async () => {
+    const lockedFile = path.join(os.tmpdir(), `ringmark-test-locked-${Date.now()}.png`)
+    writeFileSync(lockedFile, 'locked')
+    chmodSync(lockedFile, 0o000)
+
+    let fetchCalled = false
+    const original = global.fetch
+    global.fetch = async () => { fetchCalled = true; return Response.json({}) }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH1', file_path: lockedFile },
+      })
+      assert.ok(result.isError, 'expected isError: true for a permission-denied file')
+      assert.ok(!fetchCalled, 'fetch should not be called when file cannot be read')
+      assert.ok(
+        textOf(result).includes('Permission denied'),
+        `expected permission-denied error, got: ${textOf(result)}`
+      )
+    } finally {
+      chmodSync(lockedFile, 0o644)
+      try { unlinkSync(lockedFile) } catch { /* already gone */ }
       global.fetch = original
       await cleanup()
     }
