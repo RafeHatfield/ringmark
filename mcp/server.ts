@@ -311,45 +311,55 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
   server.tool(
     'upload_photo',
     'Upload a photo to a workshop object. The photo appears on the public story page.\n\n' +
-    'Two modes — use whichever applies:\n' +
-    '• image_data + filename: pass the image as base64 bytes. Use this when Claude has the image\n' +
-    '  in its context (e.g. a file the user attached in chat).\n' +
-    '• file_path: an absolute path on the machine running the MCP server (the user\'s own disk).\n' +
-    '  Use this when the image is already in the local filesystem (e.g. ~/Downloads/IMG_1719.jpeg).',
+    'Three modes — use whichever applies:\n' +
+    '• image_url: a publicly accessible URL (iCloud share link, Google Photos link, Dropbox, CDN, etc.).\n' +
+    '  The MCP server fetches the image server-side. This is the best option when Claude has a URL.\n' +
+    '• file_path: an absolute path on the machine running the MCP server (the user\'s own disk,\n' +
+    '  e.g. ~/Downloads/IMG_1719.jpeg). Best when the file is already local.\n' +
+    '• image_data + filename: base64 bytes (last resort — impractical for real photos).',
     {
       object_id: z.string().describe('Workshop ID (e.g. RH1) or UUID of the object to attach the photo to'),
+      image_url: z.string().optional().describe(
+        'Publicly accessible URL of the image. The MCP server will download it. ' +
+        'Works with iCloud shared links, Google Photos, Dropbox, Imgur, CDN URLs, etc.'
+      ),
+      file_path: z.string().optional().describe(
+        'Absolute path to an image file on the MCP server host (the user\'s local disk). ' +
+        'E.g. /Users/rafe/Downloads/IMG_1719.jpeg'
+      ),
       image_data: z.string().optional().describe(
-        'Base64-encoded image bytes (no data: URI prefix). Use when Claude has the image in its context ' +
-        '(e.g. a chat-attached file). Mutually exclusive with file_path. Limit: ~15 MB original (~20 MB base64).'
+        'Base64-encoded image bytes (no data: URI prefix). Last resort — impractical for images over ~100 KB. ' +
+        'Requires filename. Use image_url or file_path instead whenever possible.'
       ),
       filename: z.string().optional().describe(
         'Original filename including extension (e.g. IMG_1719.jpeg). Required when using image_data.'
       ),
-      file_path: z.string().optional().describe(
-        'Absolute path to an image file on the MCP server host (the user\'s local disk). ' +
-        'Use when the image is not in Claude\'s context. Mutually exclusive with image_data.'
-      ),
       caption: z.string().optional().describe('Optional caption for the photo'),
     },
-    async ({ object_id, image_data, filename, file_path, caption }) => {
+    async ({ object_id, image_url, file_path, image_data, filename, caption }) => {
       let fileBuffer: Buffer
       let uploadFilename: string
       let mimeType: string
 
-      if (image_data) {
-        // Image data travels inline through the MCP protocol — no disk access needed.
-        // This is the path Claude must use for chat-attached images.
-        if (!filename) throw new Error('filename is required when using image_data')
-        const MAX_BASE64 = 20 * 1024 * 1024 // ~15 MB original
-        if (image_data.length > MAX_BASE64) {
-          throw new Error(
-            `image_data exceeds the 20 MB base64 limit (got ~${Math.round(image_data.length / 1024 / 1024)} MB). ` +
-            'Downscale the image before uploading.'
-          )
+      if (image_url) {
+        // Server-side URL fetch — the argument is just a short URL string.
+        // Works for any publicly accessible image (iCloud share, Google Photos, Dropbox, CDN, etc.)
+        let fetchRes: Response
+        try {
+          fetchRes = await fetch(image_url)
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err)
+          throw new Error(`Failed to fetch image URL: ${msg}`)
         }
-        fileBuffer = Buffer.from(image_data, 'base64')
-        uploadFilename = filename
-        mimeType = extToMime(filename.split('.').pop()?.toLowerCase() ?? '')
+        if (!fetchRes.ok) {
+          throw new Error(`Image URL returned HTTP ${fetchRes.status}: ${image_url}`)
+        }
+        const contentType = fetchRes.headers.get('content-type') ?? 'image/jpeg'
+        mimeType = contentType.split(';')[0].trim()
+        fileBuffer = Buffer.from(await fetchRes.arrayBuffer())
+        // Derive filename from URL path, falling back to a timestamped default
+        const urlPath = new URL(image_url).pathname
+        uploadFilename = filename ?? (urlPath.split('/').pop()?.split('?')[0] || `photo-${Date.now()}.jpg`)
       } else if (file_path) {
         // Path on the MCP server host (the user's local machine under Claude Desktop).
         try {
@@ -358,15 +368,27 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
           throw new Error(
             `Cannot read file: ${file_path}\n` +
             'Ensure this path exists on the machine running the MCP server. ' +
-            'If the image is a chat-attached file, use image_data + filename instead.'
+            'If the image is at a URL (iCloud link, Google Photos, etc.) use image_url instead.'
           )
         }
         uploadFilename = file_path.split('/').pop() ?? 'photo.jpg'
         mimeType = extToMime(file_path.split('.').pop()?.toLowerCase() ?? '')
+      } else if (image_data) {
+        if (!filename) throw new Error('filename is required when using image_data')
+        const MAX_BASE64 = 20 * 1024 * 1024 // ~15 MB original
+        if (image_data.length > MAX_BASE64) {
+          throw new Error(
+            `image_data exceeds the 20 MB base64 limit (got ~${Math.round(image_data.length / 1024 / 1024)} MB). ` +
+            'Use image_url or file_path instead.'
+          )
+        }
+        fileBuffer = Buffer.from(image_data, 'base64')
+        uploadFilename = filename
+        mimeType = extToMime(filename.split('.').pop()?.toLowerCase() ?? '')
       } else {
         throw new Error(
-          'Provide either image_data (base64, for chat-attached images) ' +
-          'or file_path (local path on the MCP server host).'
+          'Provide one of: image_url (public URL), file_path (local path on MCP host), ' +
+          'or image_data + filename (base64).'
         )
       }
 

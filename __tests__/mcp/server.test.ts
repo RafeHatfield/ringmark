@@ -299,6 +299,77 @@ describe('ringmark MCP server — upload_photo', () => {
     }
   })
 
+  it('image_url fetches the URL and sends bytes to the API', async () => {
+    const pngBytes = Buffer.from(
+      '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890' +
+      '000000a49444154789c6260000000020001e221bc330000000049454e44ae426082',
+      'hex'
+    )
+
+    let fetchCallCount = 0
+    let capturedApiUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, _init?: RequestInit) => {
+      fetchCallCount++
+      const urlStr = String(url)
+      if (urlStr.includes('example.com')) {
+        // First call: the image URL fetch
+        return new Response(pngBytes, {
+          status: 200,
+          headers: { 'Content-Type': 'image/png' },
+        })
+      }
+      // Second call: the API upload
+      capturedApiUrl = urlStr
+      return Response.json({
+        id: 'photo-url-aaa',
+        object_id: 'obj',
+        storage_path: 'acc/obj/p.png',
+        caption: null,
+        is_public: true,
+        sort_order: 0,
+        signed_url: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+      }, { status: 201 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH5', image_url: 'https://example.com/bowl.png' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.equal(fetchCallCount, 2, 'expected two fetch calls: URL + API')
+      assert.ok(capturedApiUrl.includes('/objects/RH5/photos'), `wrong API URL: ${capturedApiUrl}`)
+      assert.ok(textOf(result).includes('photo-url-aaa'), `expected photo ID, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('image_url with a non-200 response surfaces the status', async () => {
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      if (String(url).includes('example.com')) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      return Response.json({})
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH5', image_url: 'https://example.com/private.jpg' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 403 image URL')
+      assert.ok(textOf(result).includes('403'), `expected 403 in error, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
   it('image_data + filename uploads base64 bytes without reading the disk', async () => {
     // Minimal 1×1 PNG as base64 — same bytes as the tmpFile but passed inline
     const pngBase64 = Buffer.from(
