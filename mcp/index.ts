@@ -61,15 +61,35 @@ if (!API_KEY) {
 }
 
 async function api(method: string, endpoint: string, body?: Record<string, unknown>): Promise<unknown> {
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30_000)
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(msg.includes('abort') ? `Request timed out: ${method} ${endpoint}` : msg)
+  } finally {
+    clearTimeout(timeout)
+  }
+
   if (res.status === 204) return null
+
+  // Guard against HTML error pages (wrong URL, auth redirect, Next.js 404, etc.)
+  const contentType = res.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json')) {
+    const preview = (await res.text()).slice(0, 200)
+    throw new Error(`API returned non-JSON (HTTP ${res.status}): ${preview}`)
+  }
+
   const json = await res.json() as { error?: string }
   if (!res.ok) throw new Error(json?.error ?? `API error ${res.status}`)
   return json
