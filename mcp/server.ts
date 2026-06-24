@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { readFileSync } from 'fs'
 import { z } from 'zod'
 
 /**
@@ -34,6 +35,37 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
     if (res.status === 204) return null
 
     // Guard against HTML error pages (wrong URL, auth redirect, Next.js 404, etc.)
+    const contentType = res.headers.get('content-type') ?? ''
+    if (!contentType.includes('application/json')) {
+      const preview = (await res.text()).slice(0, 200)
+      throw new Error(`API returned non-JSON (HTTP ${res.status}): ${preview}`)
+    }
+
+    const json = await res.json() as { error?: string }
+    if (!res.ok) throw new Error(json?.error ?? `API error ${res.status}`)
+    return json
+  }
+
+  // ── Multipart upload client ───────────────────────────────────────────────
+
+  async function apiUpload(endpoint: string, form: FormData): Promise<unknown> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    let res: Response
+    try {
+      res = await fetch(`${apiBase}${endpoint}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+        signal: controller.signal,
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new Error(msg.includes('abort') ? `Upload timed out: ${endpoint}` : msg)
+    } finally {
+      clearTimeout(timeout)
+    }
+
     const contentType = res.headers.get('content-type') ?? ''
     if (!contentType.includes('application/json')) {
       const preview = (await res.text()).slice(0, 200)
@@ -274,5 +306,101 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
     }
   )
 
+  // ── upload_photo ──────────────────────────────────────────────────────────
+
+  server.tool(
+    'upload_photo',
+    'Upload a photo to a workshop object. The photo appears on the public story page.\n\n' +
+    'Two modes — use whichever applies:\n' +
+    '• image_data + filename: pass the image as base64 bytes. Use this when Claude has the image\n' +
+    '  in its context (e.g. a file the user attached in chat).\n' +
+    '• file_path: an absolute path on the machine running the MCP server (the user\'s own disk).\n' +
+    '  Use this when the image is already in the local filesystem (e.g. ~/Downloads/IMG_1719.jpeg).',
+    {
+      object_id: z.string().describe('Workshop ID (e.g. RH1) or UUID of the object to attach the photo to'),
+      image_data: z.string().optional().describe(
+        'Base64-encoded image bytes (no data: URI prefix). Use when Claude has the image in its context ' +
+        '(e.g. a chat-attached file). Mutually exclusive with file_path. Limit: ~15 MB original (~20 MB base64).'
+      ),
+      filename: z.string().optional().describe(
+        'Original filename including extension (e.g. IMG_1719.jpeg). Required when using image_data.'
+      ),
+      file_path: z.string().optional().describe(
+        'Absolute path to an image file on the MCP server host (the user\'s local disk). ' +
+        'Use when the image is not in Claude\'s context. Mutually exclusive with image_data.'
+      ),
+      caption: z.string().optional().describe('Optional caption for the photo'),
+    },
+    async ({ object_id, image_data, filename, file_path, caption }) => {
+      let fileBuffer: Buffer
+      let uploadFilename: string
+      let mimeType: string
+
+      if (image_data) {
+        // Image data travels inline through the MCP protocol — no disk access needed.
+        // This is the path Claude must use for chat-attached images.
+        if (!filename) throw new Error('filename is required when using image_data')
+        const MAX_BASE64 = 20 * 1024 * 1024 // ~15 MB original
+        if (image_data.length > MAX_BASE64) {
+          throw new Error(
+            `image_data exceeds the 20 MB base64 limit (got ~${Math.round(image_data.length / 1024 / 1024)} MB). ` +
+            'Downscale the image before uploading.'
+          )
+        }
+        fileBuffer = Buffer.from(image_data, 'base64')
+        uploadFilename = filename
+        mimeType = extToMime(filename.split('.').pop()?.toLowerCase() ?? '')
+      } else if (file_path) {
+        // Path on the MCP server host (the user's local machine under Claude Desktop).
+        try {
+          fileBuffer = readFileSync(file_path)
+        } catch {
+          throw new Error(
+            `Cannot read file: ${file_path}\n` +
+            'Ensure this path exists on the machine running the MCP server. ' +
+            'If the image is a chat-attached file, use image_data + filename instead.'
+          )
+        }
+        uploadFilename = file_path.split('/').pop() ?? 'photo.jpg'
+        mimeType = extToMime(file_path.split('.').pop()?.toLowerCase() ?? '')
+      } else {
+        throw new Error(
+          'Provide either image_data (base64, for chat-attached images) ' +
+          'or file_path (local path on the MCP server host).'
+        )
+      }
+
+      const form = new FormData()
+      form.append('file', new Blob([new Uint8Array(fileBuffer)], { type: mimeType }), uploadFilename)
+      if (caption) form.append('caption', caption)
+
+      const result = await apiUpload(
+        `/objects/${encodeURIComponent(object_id)}/photos`,
+        form
+      ) as { id: string; sort_order: number; signed_url?: string | null }
+
+      const lines = [
+        `Photo uploaded to ${object_id}`,
+        `Photo ID: ${result.id}`,
+        `Sort order: ${result.sort_order}`,
+      ]
+      if (result.signed_url) lines.push(`View: ${result.signed_url}`)
+
+      return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    }
+  )
+
   return server
+}
+
+function extToMime(ext: string): string {
+  const map: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    heic: 'image/heic',
+    heif: 'image/heif',
+  }
+  return map[ext] ?? 'image/jpeg'
 }

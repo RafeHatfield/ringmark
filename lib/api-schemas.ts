@@ -146,6 +146,23 @@ export const CreateChildSchema = z
   })
   .openapi('CreateChild')
 
+// ── Photo response ────────────────────────────────────────────────────────────
+
+export const PhotoSchema = z
+  .object({
+    id: z.string().uuid().openapi({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' }),
+    object_id: z.string().uuid(),
+    storage_path: z.string().openapi({ example: 'acc-uuid/obj-uuid/photo-uuid.jpg' }),
+    caption: z.string().nullable(),
+    is_public: z.boolean(),
+    sort_order: z.number().int(),
+    signed_url: z.string().nullable().openapi({
+      description: 'Signed storage URL valid for 1 hour. Null if the URL could not be generated.',
+    }),
+    created_at: z.string().datetime().nullable(),
+  })
+  .openapi('Photo')
+
 // ── Error response ────────────────────────────────────────────────────────────
 
 export const ErrorSchema = z

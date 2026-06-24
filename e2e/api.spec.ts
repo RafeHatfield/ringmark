@@ -731,6 +731,112 @@ test.describe('POST /api/v1/objects/:id/children', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/v1/objects/:id/photos
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Minimal 1×1 transparent PNG (67 bytes)
+const MINIMAL_PNG = Buffer.from(
+  '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890' +
+  '000000a49444154789c6260000000020001e221bc330000000049454e44ae426082',
+  'hex'
+)
+
+test.describe('POST /api/v1/objects/:id/photos', () => {
+  const uploadedPhotoIds: string[] = []
+
+  test.afterAll(async ({ request }) => {
+    // Photos are cascade-deleted when their parent object is deleted.
+    // The parent (primaryObjectId) is cleaned up by the outer afterAll.
+    // This is a no-op placeholder in case we ever need explicit photo cleanup.
+    void uploadedPhotoIds
+    void request
+  })
+
+  test('valid PNG upload → 201 with photo record and signed_url', async ({ request }) => {
+    const r = await request.post(`/api/v1/objects/${primaryObjectId}/photos`, {
+      headers: { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` },
+      multipart: {
+        file: { name: 'test.png', mimeType: 'image/png', buffer: MINIMAL_PNG },
+        caption: 'Test caption',
+      },
+    })
+    expect(r.status()).toBe(201)
+    const body = await r.json()
+    expect(body).toHaveProperty('id')
+    expect(body).toHaveProperty('object_id')
+    expect(body).toHaveProperty('storage_path')
+    expect(body.caption).toBe('Test caption')
+    expect(body.is_public).toBe(true)
+    expect(typeof body.sort_order).toBe('number')
+    // signed_url may be null if storage policies differ, but the field must exist
+    expect('signed_url' in body).toBe(true)
+    uploadedPhotoIds.push(body.id)
+  })
+
+  test('upload without caption → caption is null', async ({ request }) => {
+    const r = await request.post(`/api/v1/objects/${primaryObjectId}/photos`, {
+      headers: { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` },
+      multipart: {
+        file: { name: 'nocaption.png', mimeType: 'image/png', buffer: MINIMAL_PNG },
+      },
+    })
+    expect(r.status()).toBe(201)
+    const body = await r.json()
+    expect(body.caption).toBeNull()
+    uploadedPhotoIds.push(body.id)
+  })
+
+  test('sort_order increments for each upload', async ({ request }) => {
+    const h = { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` }
+    const r1 = await request.post(`/api/v1/objects/${primaryObjectId}/photos`, {
+      headers: h,
+      multipart: { file: { name: 'a.png', mimeType: 'image/png', buffer: MINIMAL_PNG } },
+    })
+    const r2 = await request.post(`/api/v1/objects/${primaryObjectId}/photos`, {
+      headers: h,
+      multipart: { file: { name: 'b.png', mimeType: 'image/png', buffer: MINIMAL_PNG } },
+    })
+    expect(r1.status()).toBe(201)
+    expect(r2.status()).toBe(201)
+    const b1 = await r1.json()
+    const b2 = await r2.json()
+    expect(b2.sort_order).toBeGreaterThan(b1.sort_order)
+    uploadedPhotoIds.push(b1.id, b2.id)
+  })
+
+  test('missing file field → 400', async ({ request }) => {
+    const r = await request.post(`/api/v1/objects/${primaryObjectId}/photos`, {
+      headers: { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` },
+      multipart: { caption: 'No file here' },
+    })
+    expect(r.status()).toBe(400)
+    const body = await r.json()
+    expect(body).toHaveProperty('error')
+  })
+
+  test('unknown object ID → 404', async ({ request }) => {
+    const r = await request.post('/api/v1/objects/00000000-0000-0000-0000-000000000000/photos', {
+      headers: { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` },
+      multipart: {
+        file: { name: 'test.png', mimeType: 'image/png', buffer: MINIMAL_PNG },
+      },
+    })
+    expect(r.status()).toBe(404)
+    const body = await r.json()
+    expect(body).toHaveProperty('error')
+  })
+
+  test('missing auth → 401', async ({ request }) => {
+    const r = await request.post(`/api/v1/objects/${primaryObjectId}/photos`, {
+      multipart: {
+        file: { name: 'test.png', mimeType: 'image/png', buffer: MINIMAL_PNG },
+      },
+    })
+    expect(r.status()).toBe(401)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/v1/openapi.json
 // ─────────────────────────────────────────────────────────────────────────────
 

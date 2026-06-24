@@ -16,6 +16,7 @@ import {
   CreateObjectSchema,
   PatchObjectSchema,
   CreateChildSchema,
+  PhotoSchema,
   ErrorSchema,
   objectTypeEnum,
   objectStatusEnum,
@@ -31,6 +32,7 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register('CreateObject', CreateObjectSchema)
   registry.register('PatchObject', PatchObjectSchema)
   registry.register('CreateChild', CreateChildSchema)
+  registry.register('Photo', PhotoSchema)
   registry.register('Error', ErrorSchema)
 
   // ── Security scheme ─────────────────────────────────────────────────────────
@@ -205,6 +207,41 @@ function buildRegistry(): OpenAPIRegistry {
       },
       400: {
         description: 'Validation error',
+        content: { 'application/json': { schema: ErrorSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  // ── POST /api/v1/objects/:id/photos ────────────────────────────────────────
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/objects/{id}/photos',
+    tags: ['Photos'],
+    summary: 'Upload a photo',
+    description: 'Upload a photo (JPEG, PNG, WebP, or HEIC) to a workshop object via multipart/form-data. The photo is stored in Supabase Storage and a signed URL valid for 1 hour is returned.',
+    security,
+    request: {
+      params: z.object({ id: idParam.schema }),
+      body: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: z.object({
+              file: z.string().openapi({ format: 'binary', description: 'Image file (JPEG, PNG, WebP, or HEIC)' }),
+              caption: z.string().optional().openapi({ description: 'Optional photo caption' }),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: 'Uploaded photo record with a 1-hour signed URL',
+        content: { 'application/json': { schema: PhotoSchema } },
+      },
+      400: {
+        description: 'Missing file field or non-multipart body',
         content: { 'application/json': { schema: ErrorSchema } },
       },
       ...errorResponses,

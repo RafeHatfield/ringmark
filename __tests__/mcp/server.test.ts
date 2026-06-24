@@ -12,6 +12,9 @@
 
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
+import { writeFileSync, unlinkSync } from 'fs'
+import os from 'node:os'
+import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { createServer } from '../../mcp/server.js'
@@ -28,6 +31,7 @@ const EXPECTED_TOOLS = [
   'save_story',
   'search_objects',
   'update_object',
+  'upload_photo',
 ].sort()
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -55,7 +59,7 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ringmark MCP server — manifest', () => {
-  it('tools/list returns all 8 expected tools', async () => {
+  it('tools/list returns all 9 expected tools', async () => {
     const { client, cleanup } = await connectPair()
     try {
       const { tools } = await client.listTools()
@@ -203,6 +207,211 @@ describe('ringmark MCP server — get_object behaviour', () => {
       assert.equal(capturedAuth, `Bearer ${TEST_KEY}`)
     } finally {
       global.fetch = original
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — upload_photo', () => {
+  // Minimal valid PNG (1×1 transparent pixel) written to disk for upload tests
+  const tmpFile = path.join(os.tmpdir(), `ringmark-test-${Date.now()}.png`)
+
+  before(() => {
+    // 67-byte minimal PNG
+    const png = Buffer.from(
+      '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890' +
+      '000000a49444154789c6260000000020001e221bc330000000049454e44ae426082',
+      'hex'
+    )
+    writeFileSync(tmpFile, png)
+  })
+
+  after(() => {
+    try { unlinkSync(tmpFile) } catch { /* already gone */ }
+  })
+
+  it('sends multipart POST to /objects/:id/photos and returns photo ID', async () => {
+    let capturedUrl = ''
+    let capturedAuth = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedAuth = (init?.headers as Record<string, string>)?.['Authorization'] ?? ''
+      return Response.json({
+        id: 'photo-uuid-123',
+        object_id: 'obj-uuid-456',
+        storage_path: 'acc/obj/photo.png',
+        caption: null,
+        is_public: true,
+        sort_order: 0,
+        signed_url: 'https://storage.example.com/test.png',
+        created_at: '2026-01-01T00:00:00.000Z',
+      }, { status: 201 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH1', file_path: tmpFile },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(
+        capturedUrl.includes('/objects/RH1/photos'),
+        `expected URL to include /objects/RH1/photos, got: ${capturedUrl}`
+      )
+      assert.equal(capturedAuth, `Bearer ${TEST_KEY}`)
+      assert.ok(textOf(result).includes('photo-uuid-123'), `expected photo ID in response, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('includes caption in the form when provided', async () => {
+    let capturedForm: FormData | null = null
+    const original = global.fetch
+    global.fetch = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedForm = init?.body as FormData
+      return Response.json({
+        id: 'photo-uuid-456',
+        object_id: 'obj',
+        storage_path: 'acc/obj/p.png',
+        caption: 'My caption',
+        is_public: true,
+        sort_order: 1,
+        signed_url: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+      }, { status: 201 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH1', file_path: tmpFile, caption: 'My caption' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedForm !== null, 'fetch body should be FormData')
+      const form = capturedForm as FormData
+      assert.equal(form.get('caption'), 'My caption', 'caption should appear in FormData')
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('image_data + filename uploads base64 bytes without reading the disk', async () => {
+    // Minimal 1×1 PNG as base64 — same bytes as the tmpFile but passed inline
+    const pngBase64 = Buffer.from(
+      '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890' +
+      '000000a49444154789c6260000000020001e221bc330000000049454e44ae426082',
+      'hex'
+    ).toString('base64')
+
+    let capturedUrl = ''
+    let capturedBody: FormData | null = null
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedBody = init?.body as FormData
+      return Response.json({
+        id: 'photo-b64-789',
+        object_id: 'obj',
+        storage_path: 'acc/obj/p.png',
+        caption: null,
+        is_public: true,
+        sort_order: 0,
+        signed_url: null,
+        created_at: '2026-01-01T00:00:00.000Z',
+      }, { status: 201 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH4', image_data: pngBase64, filename: 'chat-photo.png' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.includes('/objects/RH4/photos'), `wrong URL: ${capturedUrl}`)
+      assert.ok(capturedBody !== null, 'fetch should have been called')
+      assert.ok(textOf(result).includes('photo-b64-789'), `expected photo ID, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('image_data without filename returns an error without calling the API', async () => {
+    let fetchCalled = false
+    const original = global.fetch
+    global.fetch = async () => { fetchCalled = true; return Response.json({}) }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH4', image_data: 'dGVzdA==' }, // no filename
+      })
+      assert.ok(result.isError, 'expected isError: true when filename is missing')
+      assert.ok(!fetchCalled, 'fetch should not be called when required field is absent')
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('neither file_path nor image_data returns a descriptive error', async () => {
+    let fetchCalled = false
+    const original = global.fetch
+    global.fetch = async () => { fetchCalled = true; return Response.json({}) }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH4' }, // nothing to upload
+      })
+      assert.ok(result.isError, 'expected isError: true when no source is provided')
+      assert.ok(!fetchCalled, 'fetch should not be called')
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('nonexistent file returns an error without calling the API', async () => {
+    let fetchCalled = false
+    const original = global.fetch
+    global.fetch = async () => { fetchCalled = true; return Response.json({}) }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH1', file_path: '/nonexistent/path/photo.jpg' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a missing file')
+      assert.ok(!fetchCalled, 'fetch should not be called when file cannot be read')
+      assert.ok(textOf(result).includes('Cannot read file'), `expected file error, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('API error on upload surfaces the error message', async () => {
+    const restore = mockFetch(
+      Response.json({ error: 'Storage upload failed: bucket quota exceeded' }, { status: 500 })
+    )
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'upload_photo',
+        arguments: { object_id: 'RH1', file_path: tmpFile },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 500 response')
+      assert.ok(
+        textOf(result).includes('Storage upload failed'),
+        `expected storage error message, got: ${textOf(result)}`
+      )
+    } finally {
+      restore()
       await cleanup()
     }
   })
