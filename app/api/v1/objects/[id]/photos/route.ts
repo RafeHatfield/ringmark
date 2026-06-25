@@ -88,6 +88,9 @@ export async function POST(
   if (!file || !(file instanceof File)) {
     return Response.json({ error: 'Missing required file field' }, { status: 400 })
   }
+  if (file.size === 0) {
+    return Response.json({ error: 'Uploaded file is empty' }, { status: 400 })
+  }
 
   const caption = form.get('caption')
   const captionStr = typeof caption === 'string' ? caption.trim() || null : null

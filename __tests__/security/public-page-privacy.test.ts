@@ -109,6 +109,37 @@ describe('public page privacy', () => {
   })
 })
 
+describe('public page lineage rendering', () => {
+  // These tests catch the regression where the page only showed the single leaf
+  // object instead of the full lineage chain. A page that doesn't walk parent_id
+  // in a loop cannot render the journey timeline.
+
+  it('walks the parent_id chain in a while loop (not just reads the leaf object)', () => {
+    assert.ok(
+      source.includes('parent_id') && source.includes('while ('),
+      'public page must walk parent_id in a while loop to build the lineage chain'
+    )
+    assert.ok(
+      source.includes('chain.unshift'),
+      'public page must prepend ancestors with chain.unshift to produce root-first order'
+    )
+  })
+
+  it('renders step_label from lineage data (proves iteration over chain steps)', () => {
+    assert.ok(
+      source.includes('step_label'),
+      'public page must render step_label — a lineage field absent from a single-object render'
+    )
+  })
+
+  it('maps over displaySteps to render the journey timeline', () => {
+    assert.ok(
+      source.includes('displaySteps') && source.includes('.map('),
+      'public page must map over displaySteps to render each journey stage'
+    )
+  })
+})
+
 describe('public page does not expose private column names anywhere', () => {
   for (const field of PRIVATE_FIELDS) {
     it(`"${field}" does not appear in any SELECT call`, () => {

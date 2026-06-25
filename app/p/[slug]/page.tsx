@@ -3,9 +3,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { APP_URL, SIGNED_URL_EXPIRY } from '@/lib/constants'
+import { APP_URL, SIGNED_URL_EXPIRY, OBJECT_TYPES } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
-import { PhotoStrip } from './photo-viewer'
+
+const TYPE_LABELS = Object.fromEntries(OBJECT_TYPES.map(t => [t.value, t.label]))
 
 export async function generateMetadata({
   params,
@@ -44,18 +45,8 @@ export async function generateMetadata({
     title: `${title} — Ringmark`,
     description,
     alternates: { canonical: url },
-    openGraph: {
-      title,
-      description,
-      url,
-      siteName: 'Ringmark',
-      type: 'article',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-    },
+    openGraph: { title, description, url, siteName: 'Ringmark', type: 'article' },
+    twitter: { card: 'summary_large_image', title, description },
   }
 }
 
@@ -67,8 +58,7 @@ export default async function PublicStoryPage({
   const { slug } = await params
   const supabase = await createClient()
 
-  // Round 1: user session + object details in parallel
-  // (object query includes account_id + is_published for auth routing)
+  // Round 1: session + leaf object (by slug)
   const [
     { data: { user } },
     { data: object },
@@ -76,9 +66,7 @@ export default async function PublicStoryPage({
     supabase.auth.getUser(),
     supabase
       .from('wood_objects')
-      .select(
-        'id, public_slug, account_id, is_published, object_type, status, title, species, public_title, public_story, public_notes, public_care',
-      )
+      .select('id, public_slug, account_id, is_published, object_type, title, species, public_title, public_story, public_notes, public_care, parent_id')
       .eq('public_slug', slug)
       .maybeSingle(),
   ])
@@ -87,18 +75,12 @@ export default async function PublicStoryPage({
     return <NotFound message="This piece could not be found." />
   }
 
-  // Round 2: ownership check + photos + account data in parallel
+  // Round 2: ownership + account data in parallel while we start building the lineage
   const admin = createAdminClient()
-  const [ownerCheck, { data: photos }, { data: accountData }] = await Promise.all([
+  const [ownerCheck, { data: accountData }] = await Promise.all([
     user
       ? supabase.from('accounts').select('id').eq('id', object.account_id).maybeSingle()
       : Promise.resolve({ data: null }),
-    supabase
-      .from('object_photos')
-      .select('id, storage_path, caption, sort_order')
-      .eq('object_id', object.id)
-      .eq('is_public', true)
-      .order('sort_order', { ascending: false }),
     admin
       .from('accounts')
       .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url')
@@ -108,35 +90,97 @@ export default async function PublicStoryPage({
 
   const isOwner = !!ownerCheck?.data
 
-  // Non-owners can't see unpublished pieces; owners can preview their own
   if (!object.is_published && !isOwner) {
     return <NotFound message="This piece's story hasn't been published yet." />
   }
 
-  let photoUrls: { caption: string | null; url: string }[] = []
-  if (photos && photos.length > 0) {
-    const { data: signed } = await supabase.storage
-      .from('object-photos')
-      .createSignedUrls(
-        photos.map((p) => p.storage_path),
-        SIGNED_URL_EXPIRY,
-      )
-    photoUrls = photos.map((p, i) => ({
-      caption: p.caption,
-      url: signed?.[i]?.signedUrl ?? '',
-    }))
+  // Build lineage chain root → leaf by walking parent_id.
+  // We query each ancestor individually so the walk terminates naturally at
+  // the root (parent_id = null) without needing a recursive CTE.
+  type ChainStep = {
+    id: string
+    parent_id: string | null
+    workshop_id: string
+    object_type: string
+    title: string | null
+    public_story: string | null
+    public_notes: string | null
+    public_care: string | null
+    species: string | null
   }
+  const chain: ChainStep[] = []
+  let currentId: string | null = object.id
+
+  while (currentId) {
+    const nextId: string = currentId
+    const { data: step } = await admin
+      .from('wood_objects')
+      .select('id, parent_id, object_type, title, public_story, public_notes, public_care, species')
+      .eq('id', nextId)
+      .eq('account_id', object.account_id)
+      .maybeSingle()
+
+    if (!step) break
+    chain.unshift(step as ChainStep)
+    currentId = (step as ChainStep).parent_id
+  }
+
+  // Batch-fetch the first public photo + count for every step in one query.
+  const { data: allPhotos } = await admin
+    .from('object_photos')
+    .select('object_id, storage_path, sort_order')
+    .in('object_id', chain.map(s => s.id))
+    .eq('is_public', true)
+    .order('sort_order', { ascending: true })
+
+  const photoMeta = new Map<string, { path: string; count: number }>()
+  for (const p of (allPhotos ?? [])) {
+    const existing = photoMeta.get(p.object_id)
+    if (!existing) {
+      photoMeta.set(p.object_id, { path: p.storage_path, count: 1 })
+    } else {
+      existing.count++
+    }
+  }
+
+  // Batch-generate signed URLs for all thumbnails
+  const thumbPaths = [...photoMeta.values()].map(v => v.path)
+  const signedByPath = new Map<string, string>()
+  if (thumbPaths.length > 0) {
+    const { data: signed } = await admin.storage
+      .from('object-photos')
+      .createSignedUrls(thumbPaths, SIGNED_URL_EXPIRY)
+    for (const s of (signed ?? [])) {
+      if (s.signedUrl && s.path) signedByPath.set(s.path, s.signedUrl)
+    }
+  }
+
+  // Annotate each step with its display label, thumbnail URL, and photo count
+  const steps = chain.map(step => {
+    const meta = photoMeta.get(step.id)
+    return {
+      ...step,
+      step_label: step.title || TYPE_LABELS[step.object_type] || step.object_type,
+      thumbnail_url: meta ? (signedByPath.get(meta.path) ?? null) : null,
+      photo_count: meta?.count ?? 0,
+    }
+  })
+
+  // The finished piece is the leaf (last in chain); display order is newest first
+  const finalStep = steps[steps.length - 1]
+  const displaySteps = [...steps].reverse()
+  const hasLineage = steps.length > 1
 
   const workshopName = getWorkshopName(accountData)
 
   let makerAvatarUrl: string | null = null
   if (accountData?.avatar_storage_path) {
-    const { data } = admin.storage
-      .from('avatars')
-      .getPublicUrl(accountData.avatar_storage_path)
+    const { data } = admin.storage.from('avatars').getPublicUrl(accountData.avatar_storage_path)
     makerAvatarUrl = data.publicUrl
   }
 
+  // `object` is the leaf — use it directly for final-piece metadata and content.
+  // `finalStep` provides the thumbnail_url and photo_count from the lineage pass.
   const displayTitle = object.public_title || object.title || `/${object.public_slug}`
 
   const jsonLd = {
@@ -146,27 +190,30 @@ export default async function PublicStoryPage({
     ...(object.public_story
       ? { description: object.public_story.slice(0, 500).replace(/\s+/g, ' ').trim() }
       : {}),
-    ...(photoUrls[0]?.url ? { image: photoUrls[0].url } : {}),
+    ...(finalStep.thumbnail_url ? { image: finalStep.thumbnail_url } : {}),
     brand: { '@type': 'Brand', name: workshopName },
     url: `${APP_URL}/p/${object.public_slug}`,
     ...(object.species ? { material: object.species } : {}),
   }
 
+  const camIcon = (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#B0612F" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/>
+    </svg>
+  )
+
   return (
     <>
       <style>{`
-        @keyframes rise {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: none; }
-        }
+        @keyframes rise { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
         .reveal { animation: rise .7s cubic-bezier(.2,.6,.2,1) both; }
-        .reveal:nth-child(2) { animation-delay: .06s; }
-        .reveal:nth-child(3) { animation-delay: .12s; }
-        .reveal:nth-child(4) { animation-delay: .18s; }
-        .reveal:nth-child(5) { animation-delay: .24s; }
-        .reveal:nth-child(6) { animation-delay: .30s; }
-        .reveal:nth-child(7) { animation-delay: .36s; }
-        @media (prefers-reduced-motion: reduce) { .reveal { animation: none; } }
+        .reveal.d1 { animation-delay:.07s; } .reveal.d2 { animation-delay:.14s; }
+        .stage { position:relative; padding-left:32px; padding-bottom:28px; animation: rise .6s cubic-bezier(.2,.6,.2,1) both; }
+        .stage:nth-child(1){animation-delay:.04s;} .stage:nth-child(2){animation-delay:.12s;}
+        .stage:nth-child(3){animation-delay:.20s;} .stage:nth-child(4){animation-delay:.28s;}
+        .stage:nth-child(5){animation-delay:.36s;} .stage:nth-child(6){animation-delay:.44s;}
+        .stage:not(:last-child)::before { content:""; position:absolute; left:6px; top:20px; bottom:-4px; width:2px; background:#E7DAC4; }
+        @media (prefers-reduced-motion: reduce) { .reveal, .stage { animation:none; } }
       `}</style>
 
       <div className="min-h-screen bg-paper text-ink font-sans" style={{ WebkitFontSmoothing: 'antialiased' }}>
@@ -176,138 +223,165 @@ export default async function PublicStoryPage({
               <span className="text-[12px] text-bark">
                 {object.is_published ? 'Published · public view' : 'Draft · not yet published'}
               </span>
-              <Link
-                href={`/objects/${object.id}/story`}
-                className="text-[12px] text-cedar hover:text-heartwood transition-colors"
-              >
+              <Link href={`/objects/${object.id}/story`} className="text-[12px] text-cedar hover:text-heartwood transition-colors">
                 Edit story →
               </Link>
             </div>
           </div>
         )}
+
         <main className="max-w-[480px] mx-auto px-[22px] pb-8">
           <article>
-            <script
-              type="application/ld+json"
-              dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-            />
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
             {/* Eyebrow */}
             <p className="reveal text-center text-[12px] tracking-[0.16em] uppercase text-cedar pt-[30px] pb-[18px] m-0">
               Before it was yours
             </p>
 
-            {/* Hero */}
-            {photoUrls[0]?.url ? (
+            {/* Hero — first photo of the finished piece */}
+            {finalStep.thumbnail_url ? (
               <div className="reveal aspect-[4/3] rounded-[14px] overflow-hidden bg-sand relative">
-                <Image
-                  src={photoUrls[0].url}
-                  alt={photoUrls[0].caption ?? displayTitle}
-                  fill
-                  sizes="480px"
-                  className="object-cover"
-                  priority
-                />
+                <Image src={finalStep.thumbnail_url} alt={displayTitle} fill sizes="480px" className="object-cover" priority />
               </div>
             ) : (
               <div className="reveal aspect-[4/3] rounded-[14px] bg-sand flex items-center justify-center">
-                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#B0612F" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/>
-                </svg>
+                {camIcon}
               </div>
             )}
 
-            {/* Title block */}
-            <header className="reveal">
+            {/* Title */}
+            <header className="reveal d1">
               <h1 className="font-fraunces font-medium text-[30px] leading-[1.15] tracking-[-0.01em] mt-6 mb-[6px]">
                 {displayTitle}
               </h1>
               {object.species && (
-                <p className="text-[13px] tracking-[0.02em] text-cedar m-0">
-                  {object.species}
-                </p>
+                <p className="text-[13px] tracking-[0.02em] text-cedar m-0">{object.species}</p>
               )}
             </header>
 
-            {/* Story */}
-            {object.public_story && (
-              <p className="reveal font-fraunces font-normal text-[18px] leading-[1.72] text-[#433B30] mt-[22px] mb-0 whitespace-pre-wrap">
+            {/* Journey timeline — only rendered when there is a lineage */}
+            {hasLineage && (
+              <>
+                {/* "Its life so far" divider */}
+                <div className="reveal d2 flex items-center gap-[14px] mt-[34px] mb-[20px]">
+                  <span className="flex-1 h-px bg-hairline" />
+                  <span className="text-[11px] tracking-[0.14em] uppercase text-[#9A8466]">Its life so far</span>
+                  <span className="flex-1 h-px bg-hairline" />
+                </div>
+
+                <div>
+                  {displaySteps.map((step, i) => {
+                    const isFirst = i === 0           // newest = finished piece
+                    const isLast = i === displaySteps.length - 1  // oldest = source
+                    const isBookend = isFirst || isLast
+                    const extraPhotos = step.photo_count > 1 ? step.photo_count - 1 : 0
+
+                    return (
+                      <section key={step.id} className="stage">
+                        {/* Timeline node */}
+                        <span
+                          aria-hidden="true"
+                          className="absolute left-0 top-[7px] w-[14px] h-[14px] rounded-full border-2"
+                          style={{
+                            background: isFirst ? '#B0612F' : '#FBF6EE',
+                            borderColor: isLast ? '#B0612F' : '#CDA074',
+                          }}
+                        />
+
+                        {/* Step label */}
+                        <p className="text-[11px] tracking-[0.09em] uppercase text-[#9A8466] mb-[10px] m-0">
+                          {step.step_label}
+                        </p>
+
+                        {/* Photo */}
+                        {step.thumbnail_url ? (
+                          <div className="relative rounded-[11px] overflow-hidden bg-sand aspect-[16/10]">
+                            <Image src={step.thumbnail_url} alt={step.step_label} fill sizes="440px" className="object-cover" />
+                            {extraPhotos > 0 && (
+                              <span className="absolute top-[9px] right-[9px] bg-heartwood text-[#FBF1E6] text-[11px] px-[9px] py-[2px] rounded-full">
+                                +{extraPhotos}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="rounded-[11px] bg-sand aspect-[16/10] flex items-center justify-center">
+                            {camIcon}
+                          </div>
+                        )}
+
+                        {/* Step story — serif bookend voice for source/final, italic aside for middle */}
+                        {step.public_story && (
+                          isBookend ? (
+                            <p className="font-fraunces font-normal text-[16px] leading-[1.65] text-[#433B30] mt-[12px] mb-0 whitespace-pre-wrap">
+                              {step.public_story}
+                            </p>
+                          ) : (
+                            <p className="text-[14px] italic leading-[1.55] text-bark mt-[11px] mb-0 whitespace-pre-wrap">
+                              {step.public_story}
+                            </p>
+                          )
+                        )}
+                      </section>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Single-object fallback: show story + notes if no lineage */}
+            {!hasLineage && object.public_story && (
+              <p className="font-fraunces font-normal text-[18px] leading-[1.72] text-[#433B30] mt-[22px] mb-0 whitespace-pre-wrap">
                 {object.public_story}
               </p>
             )}
-
-            {/* Notes */}
-            {object.public_notes && (
-              <p className="reveal text-[15px] leading-[1.65] text-bark mt-4 mb-0 whitespace-pre-wrap">
+            {!hasLineage && object.public_notes && (
+              <p className="text-[15px] leading-[1.65] text-bark mt-4 mb-0 whitespace-pre-wrap">
                 {object.public_notes}
               </p>
             )}
 
-            <hr className="reveal h-px bg-hairline border-0 my-7" />
+            <hr className="h-px bg-hairline border-0 my-7" />
 
             {/* Maker */}
-            <div className="reveal flex items-center gap-[14px]">
+            <div className="flex items-center gap-[14px]">
               <div className="w-[46px] h-[46px] rounded-full bg-sand flex items-center justify-center shrink-0 overflow-hidden" aria-hidden="true">
                 {makerAvatarUrl ? (
                   <Image src={makerAvatarUrl} alt="" width={46} height={46} className="w-full h-full object-cover" />
                 ) : (
                   <svg width="30" height="30" viewBox="0 0 40 40" fill="none" stroke="#B0612F" strokeWidth="1.3">
-                    <circle cx="21" cy="20" r="3"/>
-                    <circle cx="20.5" cy="20" r="7"/>
-                    <circle cx="20" cy="20" r="11.5"/>
-                    <circle cx="19.4" cy="20" r="16" stroke="#D8A472"/>
+                    <circle cx="21" cy="20" r="3"/><circle cx="20.5" cy="20" r="7"/>
+                    <circle cx="20" cy="20" r="11.5"/><circle cx="19.4" cy="20" r="16" stroke="#D8A472"/>
                   </svg>
                 )}
               </div>
               <div>
-                <p className="text-[11px] tracking-[0.1em] uppercase text-bark m-0 mb-[2px]">
-                  From the workshop of
-                </p>
-                <Link
-                  href="/maker"
-                  className="font-fraunces font-medium text-[17px] text-ink hover:text-cedar transition-colors no-underline"
-                >
+                <p className="text-[11px] tracking-[0.1em] uppercase text-bark m-0 mb-[2px]">From the workshop of</p>
+                <Link href="/maker" className="font-fraunces font-medium text-[17px] text-ink hover:text-cedar transition-colors no-underline">
                   {workshopName}
                 </Link>
               </div>
             </div>
 
-            {/* Maker bio */}
             {accountData?.bio && (
-              <p className="reveal text-[14px] leading-[1.7] text-bark mt-4 mb-0">
-                {accountData.bio}
-              </p>
+              <p className="text-[14px] leading-[1.7] text-bark mt-4 mb-0">{accountData.bio}</p>
             )}
 
-            {/* Photo strip — client component for lightbox */}
-            {photoUrls.length > 1 && (
-              <PhotoStrip photos={photoUrls} />
-            )}
-
-            {/* Care */}
+            {/* Care — from the final piece */}
             {object.public_care && (
-              <section className="reveal bg-sand rounded-[12px] px-5 py-[18px] mt-7">
+              <section className="bg-sand rounded-[12px] px-5 py-[18px] mt-7">
                 <h2 className="text-[11px] tracking-[0.12em] uppercase text-cedar mb-2 font-medium font-sans m-0">
                   Looking after it
                 </h2>
-                <p className="text-[15px] leading-[1.62] text-[#574F44] m-0">
-                  {object.public_care}
-                </p>
+                <p className="text-[15px] leading-[1.62] text-[#574F44] m-0">{object.public_care}</p>
               </section>
             )}
-
           </article>
 
-          {/* Footer */}
           <footer className="text-center py-[30px]">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 text-[#9C9080] no-underline text-[12px] tracking-[0.05em] rounded-md px-2 py-1.5 hover:text-heartwood transition-colors"
-            >
+            <Link href="/" className="inline-flex items-center gap-2 text-[#9C9080] no-underline text-[12px] tracking-[0.05em] rounded-md px-2 py-1.5 hover:text-heartwood transition-colors">
               <svg width="16" height="16" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                <circle cx="20.5" cy="20" r="4"/>
-                <circle cx="20" cy="20" r="10"/>
-                <circle cx="19.5" cy="20" r="16"/>
+                <circle cx="20.5" cy="20" r="4"/><circle cx="20" cy="20" r="10"/><circle cx="19.5" cy="20" r="16"/>
               </svg>
               <span>Tracked with Ringmark</span>
             </Link>
