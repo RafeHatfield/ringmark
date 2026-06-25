@@ -219,7 +219,7 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
   server.tool(
     'update_object',
     'Update internal fields on an existing object. Only pass fields you want to change.\n\n' +
-    'This tool handles: object_type, status, title, species, location_text, private_notes.\n' +
+    'This tool handles: object_type, status, title, species, location_text, private_notes, parent_id.\n' +
     'It does NOT handle public-facing fields (public_title, public_story, public_notes, public_care) — ' +
     'use save_story for those. It does NOT toggle publish state — use publish_object for that.',
     {
@@ -230,8 +230,11 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
       species: z.string().optional(),
       location_text: z.string().optional(),
       private_notes: z.string().optional(),
+      parent_id: z.string().nullable().optional().describe(
+        'Workshop ID or UUID of the new parent. Pass null to make this object a root with no parent.'
+      ),
     },
-    async ({ id, object_type, status, title, species, location_text, private_notes }) => {
+    async ({ id, object_type, status, title, species, location_text, private_notes, parent_id }) => {
       const body: Record<string, unknown> = {}
       if (object_type !== undefined) body.object_type = object_type
       if (status !== undefined) body.status = status
@@ -239,6 +242,7 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
       if (species !== undefined) body.species = species
       if (location_text !== undefined) body.location_text = location_text
       if (private_notes !== undefined) body.private_notes = private_notes
+      if (parent_id !== undefined) body.parent_id = parent_id
 
       const updated = await api('PATCH', `/objects/${encodeURIComponent(id)}`, body) as {
         workshop_id: string; id: string
