@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { APP_URL, SIGNED_URL_EXPIRY, OBJECT_TYPES } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
+import { StagePhoto } from './stage-photo'
 
 const TYPE_LABELS = Object.fromEntries(OBJECT_TYPES.map(t => [t.value, t.label]))
 
@@ -125,44 +126,48 @@ export default async function PublicStoryPage({
     currentId = (step as ChainStep).parent_id
   }
 
-  // Batch-fetch the first public photo + count for every step in one query.
+  // Fetch ALL public photos for every step in one query so each stage can
+  // show its full photo set in the lightbox (not just a single thumbnail).
   const { data: allPhotos } = await admin
     .from('object_photos')
-    .select('object_id, storage_path, sort_order')
+    .select('object_id, storage_path, caption, sort_order')
     .in('object_id', chain.map(s => s.id))
     .eq('is_public', true)
     .order('sort_order', { ascending: true })
 
-  const photoMeta = new Map<string, { path: string; count: number }>()
+  // Group photos by step
+  const photosByStep = new Map<string, Array<{ path: string; caption: string | null }>>()
   for (const p of (allPhotos ?? [])) {
-    const existing = photoMeta.get(p.object_id)
-    if (!existing) {
-      photoMeta.set(p.object_id, { path: p.storage_path, count: 1 })
+    const bucket = photosByStep.get(p.object_id)
+    if (!bucket) {
+      photosByStep.set(p.object_id, [{ path: p.storage_path, caption: p.caption }])
     } else {
-      existing.count++
+      bucket.push({ path: p.storage_path, caption: p.caption })
     }
   }
 
-  // Batch-generate signed URLs for all thumbnails
-  const thumbPaths = [...photoMeta.values()].map(v => v.path)
+  // Batch-generate signed URLs for every photo across all steps
+  const allPaths = [...photosByStep.values()].flatMap(ps => ps.map(p => p.path))
   const signedByPath = new Map<string, string>()
-  if (thumbPaths.length > 0) {
+  if (allPaths.length > 0) {
     const { data: signed } = await admin.storage
       .from('object-photos')
-      .createSignedUrls(thumbPaths, SIGNED_URL_EXPIRY)
+      .createSignedUrls(allPaths, SIGNED_URL_EXPIRY)
     for (const s of (signed ?? [])) {
       if (s.signedUrl && s.path) signedByPath.set(s.path, s.signedUrl)
     }
   }
 
-  // Annotate each step with its display label, thumbnail URL, and photo count
+  // Annotate each step with its display label and resolved photo array
   const steps = chain.map(step => {
-    const meta = photoMeta.get(step.id)
+    const rawPhotos = photosByStep.get(step.id) ?? []
+    const photos = rawPhotos
+      .map(p => ({ url: signedByPath.get(p.path) ?? '', caption: p.caption }))
+      .filter(p => p.url)
     return {
       ...step,
       step_label: step.title || TYPE_LABELS[step.object_type] || step.object_type,
-      thumbnail_url: meta ? (signedByPath.get(meta.path) ?? null) : null,
-      photo_count: meta?.count ?? 0,
+      photos,
     }
   })
 
@@ -190,7 +195,7 @@ export default async function PublicStoryPage({
     ...(object.public_story
       ? { description: object.public_story.slice(0, 500).replace(/\s+/g, ' ').trim() }
       : {}),
-    ...(finalStep.thumbnail_url ? { image: finalStep.thumbnail_url } : {}),
+    ...(finalStep.photos[0]?.url ? { image: finalStep.photos[0].url } : {}),
     brand: { '@type': 'Brand', name: workshopName },
     url: `${APP_URL}/p/${object.public_slug}`,
     ...(object.species ? { material: object.species } : {}),
@@ -239,10 +244,10 @@ export default async function PublicStoryPage({
               Before it was yours
             </p>
 
-            {/* Hero — first photo of the finished piece */}
-            {finalStep.thumbnail_url ? (
+            {/* Hero — first photo of the finished piece, clickable */}
+            {finalStep.photos[0]?.url ? (
               <div className="reveal aspect-[4/3] rounded-[14px] overflow-hidden bg-sand relative">
-                <Image src={finalStep.thumbnail_url} alt={displayTitle} fill sizes="480px" className="object-cover" priority />
+                <Image src={finalStep.photos[0].url} alt={displayTitle} fill sizes="480px" className="object-cover" priority />
               </div>
             ) : (
               <div className="reveal aspect-[4/3] rounded-[14px] bg-sand flex items-center justify-center">
@@ -275,7 +280,6 @@ export default async function PublicStoryPage({
                     const isFirst = i === 0           // newest = finished piece
                     const isLast = i === displaySteps.length - 1  // oldest = source
                     const isBookend = isFirst || isLast
-                    const extraPhotos = step.photo_count > 1 ? step.photo_count - 1 : 0
 
                     return (
                       <section key={step.id} className="stage">
@@ -294,21 +298,8 @@ export default async function PublicStoryPage({
                           {step.step_label}
                         </p>
 
-                        {/* Photo */}
-                        {step.thumbnail_url ? (
-                          <div className="relative rounded-[11px] overflow-hidden bg-sand aspect-[16/10]">
-                            <Image src={step.thumbnail_url} alt={step.step_label} fill sizes="440px" className="object-cover" />
-                            {extraPhotos > 0 && (
-                              <span className="absolute top-[9px] right-[9px] bg-heartwood text-[#FBF1E6] text-[11px] px-[9px] py-[2px] rounded-full">
-                                +{extraPhotos}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="rounded-[11px] bg-sand aspect-[16/10] flex items-center justify-center">
-                            {camIcon}
-                          </div>
-                        )}
+                        {/* Photo — clickable, opens lightbox with all stage photos */}
+                        <StagePhoto photos={step.photos} label={step.step_label} />
 
                         {/* Step story — serif bookend voice for source/final, italic aside for middle */}
                         {step.public_story && (
