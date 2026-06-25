@@ -809,6 +809,49 @@ test.describe('GET /api/v1/objects/:id/lineage', () => {
     const r = await request.get(`/api/v1/objects/${childId}/lineage`)
     expect(r.status()).toBe(401)
   })
+
+  test('lineage updates after re-parenting via PATCH parent_id', async ({ request }) => {
+    const h = apiHeaders()
+
+    // Create a new root and two children
+    const rRoot = await request.post('/api/v1/objects', {
+      headers: h,
+      data: { object_type: 'source', workshop_id: `${RUN_TAG}RPROOT` },
+    })
+    expect(rRoot.status()).toBe(201)
+    const rootId = (await rRoot.json()).id
+    createdIds.push(rootId)
+
+    const rA = await request.post(`/api/v1/objects/${rootId}/children`, {
+      headers: h, data: { object_type: 'log' },
+    })
+    const rB = await request.post(`/api/v1/objects/${rootId}/children`, {
+      headers: h, data: { object_type: 'slab' },
+    })
+    expect(rA.status()).toBe(201)
+    expect(rB.status()).toBe(201)
+    const idA = (await rA.json()).id  // currently child of root
+    const idB = (await rB.json()).id
+    createdIds.push(idA, idB)
+
+    // Confirm A's lineage is root → A (depth 2)
+    const before = await request.get(`/api/v1/objects/${idA}/lineage`, { headers: h })
+    expect((await before.json()).steps.length).toBe(2)
+
+    // Re-parent A under B
+    const patch = await request.patch(`/api/v1/objects/${idA}`, {
+      headers: h, data: { parent_id: idB },
+    })
+    expect(patch.status()).toBe(200)
+
+    // A's lineage should now be root → B → A (depth 3)
+    const after = await request.get(`/api/v1/objects/${idA}/lineage`, { headers: h })
+    const steps = (await after.json()).steps
+    expect(steps.length).toBe(3)
+    expect(steps[0].id).toBe(rootId)
+    expect(steps[1].id).toBe(idB)
+    expect(steps[2].id).toBe(idA)
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

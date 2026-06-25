@@ -2,6 +2,7 @@ import { verifyApiKey } from '@/lib/api-auth'
 import { createServiceClient, getAccount } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
 import { PatchObjectSchema } from '@/lib/api-schemas'
+import { computeRootId } from '@/lib/lineage-utils'
 import type { WoodObjectUpdate } from '@/lib/types'
 
 const patchSchema = PatchObjectSchema
@@ -72,6 +73,26 @@ export async function PATCH(
   if (parsed.public_notes !== undefined) payload.public_notes = parsed.public_notes || null
   if (parsed.public_care !== undefined) payload.public_care = parsed.public_care || null
   if (parsed.is_published !== undefined) payload.is_published = parsed.is_published
+
+  // Re-parenting: resolve the new parent (accepts workshop ID or UUID) and recompute root_id
+  if (parsed.parent_id !== undefined) {
+    const newParentId = parsed.parent_id  // null = detach to root
+    let resolvedParentId: string | null = null
+    let newParentRootId: string | null = null
+
+    if (newParentId) {
+      const parent = await resolveObject(newParentId, account.id, db)
+      if (!parent) {
+        return Response.json({ error: `Parent not found: ${newParentId}` }, { status: 404 })
+      }
+      resolvedParentId = parent.id
+      newParentRootId = parent.root_id
+    }
+
+    payload.parent_id = resolvedParentId
+    payload.root_id = computeRootId(resolvedParentId, newParentRootId, obj.id)
+  }
+
   payload.updated_at = new Date().toISOString()
 
   const { error: updateError } = await db

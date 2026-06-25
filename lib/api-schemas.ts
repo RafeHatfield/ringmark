@@ -127,6 +127,11 @@ export const PatchObjectSchema = z
       .boolean()
       .optional()
       .openapi({ description: 'Set true to publish; false to unpublish' }),
+    parent_id: z
+      .string()
+      .nullable()
+      .optional()
+      .openapi({ description: 'Workshop ID or UUID of the new parent. Pass null to make this a root object.' }),
     // public_slug, account_id, workshop_id, workshop_id_lower are intentionally excluded
   })
   .openapi('PatchObject')
