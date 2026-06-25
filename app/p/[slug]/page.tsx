@@ -171,9 +171,12 @@ export default async function PublicStoryPage({
     }
   })
 
-  // The finished piece is the leaf (last in chain); display order is newest first
+  // The finished piece is the leaf (last in chain).
+  // Display order is chronological: source first, finished piece last.
+  // The hero image above already shows the finished piece, so the reader sees
+  // the end result first, then follows the story that led to it.
   const finalStep = steps[steps.length - 1]
-  const displaySteps = [...steps].reverse()
+  const displaySteps = steps
   const hasLineage = steps.length > 1
 
   const workshopName = getWorkshopName(accountData)
@@ -277,8 +280,8 @@ export default async function PublicStoryPage({
 
                 <div>
                   {displaySteps.map((step, i) => {
-                    const isFirst = i === 0           // newest = finished piece
-                    const isLast = i === displaySteps.length - 1  // oldest = source
+                    const isFirst = i === 0                        // source (oldest)
+                    const isLast = i === displaySteps.length - 1  // finished piece (newest)
                     const isBookend = isFirst || isLast
 
                     return (
@@ -288,8 +291,8 @@ export default async function PublicStoryPage({
                           aria-hidden="true"
                           className="absolute left-0 top-[7px] w-[14px] h-[14px] rounded-full border-2"
                           style={{
-                            background: isFirst ? '#B0612F' : '#FBF6EE',
-                            borderColor: isLast ? '#B0612F' : '#CDA074',
+                            background: isLast ? '#B0612F' : '#FBF6EE',
+                            borderColor: isFirst ? '#B0612F' : '#CDA074',
                           }}
                         />
 
