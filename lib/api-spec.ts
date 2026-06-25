@@ -235,6 +235,28 @@ function buildRegistry(): OpenAPIRegistry {
     },
   })
 
+  // ── GET /api/v1/objects/:id/photos ─────────────────────────────────────────
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/objects/{id}/photos',
+    tags: ['Photos'],
+    summary: 'List photos for an object',
+    description: 'Returns all photos attached to the object with signed URLs (valid 1 hour), ordered by sort_order.',
+    security,
+    request: { params: z.object({ id: idParam.schema }) },
+    responses: {
+      200: {
+        description: 'Photos list',
+        content: {
+          'application/json': {
+            schema: z.object({ data: z.array(PhotoSchema), total: z.number().int() }),
+          },
+        },
+      },
+      ...errorResponses,
+    },
+  })
+
   // ── POST /api/v1/objects/:id/photos ────────────────────────────────────────
   registry.registerPath({
     method: 'post',
@@ -266,6 +288,26 @@ function buildRegistry(): OpenAPIRegistry {
         description: 'Missing file field or non-multipart body',
         content: { 'application/json': { schema: ErrorSchema } },
       },
+      ...errorResponses,
+    },
+  })
+
+  // ── DELETE /api/v1/objects/:id/photos/:photoId ─────────────────────────────
+  registry.registerPath({
+    method: 'delete',
+    path: '/api/v1/objects/{id}/photos/{photoId}',
+    tags: ['Photos'],
+    summary: 'Delete a photo',
+    description: 'Removes the photo from storage and deletes the DB record. Storage removal is best-effort (DB record is always deleted).',
+    security,
+    request: {
+      params: z.object({
+        id: idParam.schema,
+        photoId: z.string().uuid().openapi({ description: 'Photo UUID' }),
+      }),
+    },
+    responses: {
+      204: { description: 'Deleted — no content' },
       ...errorResponses,
     },
   })

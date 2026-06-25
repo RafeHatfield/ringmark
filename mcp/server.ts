@@ -313,6 +313,46 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
     }
   )
 
+  // ── list_photos ───────────────────────────────────────────────────────────
+
+  server.tool(
+    'list_photos',
+    'List all photos attached to an object, with their IDs and signed URLs. ' +
+    'Use this before delete_photo to find the photo IDs you need.',
+    { object_id: z.string().describe('Workshop ID (e.g. RH4) or UUID') },
+    async ({ object_id }) => {
+      const data = await api('GET', `/objects/${encodeURIComponent(object_id)}/photos`) as {
+        data: Array<{ id: string; caption: string | null; is_public: boolean; sort_order: number; signed_url: string | null }>
+        total: number
+      }
+      if (data.total === 0) {
+        return { content: [{ type: 'text' as const, text: `No photos on ${object_id}.` }] }
+      }
+      const lines = data.data.map((p, i) => {
+        const caption = p.caption ? ` "${p.caption}"` : ''
+        const pub = p.is_public ? '' : ' [private]'
+        return `${i + 1}. ${p.id}${caption}${pub}`
+      })
+      return { content: [{ type: 'text' as const, text: `${data.total} photo(s) on ${object_id}:\n${lines.join('\n')}` }] }
+    }
+  )
+
+  // ── delete_photo ──────────────────────────────────────────────────────────
+
+  server.tool(
+    'delete_photo',
+    'Permanently delete a photo from an object. Use list_photos first to get the photo ID. ' +
+    'This cannot be undone.',
+    {
+      object_id: z.string().describe('Workshop ID (e.g. RH4) or UUID of the object the photo belongs to'),
+      photo_id: z.string().describe('UUID of the photo to delete (from list_photos)'),
+    },
+    async ({ object_id, photo_id }) => {
+      await api('DELETE', `/objects/${encodeURIComponent(object_id)}/photos/${encodeURIComponent(photo_id)}`)
+      return { content: [{ type: 'text' as const, text: `Photo ${photo_id} deleted from ${object_id}.` }] }
+    }
+  )
+
   // ── get_lineage ───────────────────────────────────────────────────────────
 
   server.tool(

@@ -961,6 +961,89 @@ test.describe('POST /api/v1/objects/:id/photos', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/objects/:id/photos  +  DELETE /api/v1/objects/:id/photos/:photoId
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('photo list + delete', () => {
+  let photoObjectId = ''
+  let uploadedPhotoId = ''
+
+  test.beforeAll(async ({ request }) => {
+    const h = apiHeaders()
+    const r = await request.post('/api/v1/objects', {
+      headers: h,
+      data: { object_type: 'finished_bowl', workshop_id: `${RUN_TAG}PHOTODEL` },
+    })
+    expect(r.status()).toBe(201)
+    photoObjectId = (await r.json()).id
+    createdIds.push(photoObjectId)
+
+    // Upload a photo to delete
+    const up = await request.post(`/api/v1/objects/${photoObjectId}/photos`, {
+      headers: { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` },
+      multipart: {
+        file: { name: 'del.png', mimeType: 'image/png', buffer: MINIMAL_PNG },
+        caption: 'to be deleted',
+      },
+    })
+    expect(up.status()).toBe(201)
+    uploadedPhotoId = (await up.json()).id
+  })
+
+  test('GET photos returns list shape with id and signed_url', async ({ request }) => {
+    const r = await request.get(`/api/v1/objects/${photoObjectId}/photos`, { headers: apiHeaders() })
+    expect(r.status()).toBe(200)
+    const body = await r.json()
+    expect(body).toHaveProperty('data')
+    expect(body).toHaveProperty('total')
+    expect(Array.isArray(body.data)).toBe(true)
+    expect(body.total).toBeGreaterThanOrEqual(1)
+    const photo = body.data.find((p: { id: string }) => p.id === uploadedPhotoId)
+    expect(photo).toBeTruthy()
+    expect(photo).toHaveProperty('id')
+    expect(photo).toHaveProperty('caption')
+    expect(photo).toHaveProperty('sort_order')
+    expect(photo).toHaveProperty('signed_url')
+  })
+
+  test('DELETE photo → 204, then GET no longer includes it', async ({ request }) => {
+    const h = { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` }
+    const del = await request.delete(`/api/v1/objects/${photoObjectId}/photos/${uploadedPhotoId}`, { headers: h })
+    expect(del.status()).toBe(204)
+
+    const list = await request.get(`/api/v1/objects/${photoObjectId}/photos`, { headers: h })
+    const body = await list.json()
+    const ids = (body.data as { id: string }[]).map(p => p.id)
+    expect(ids).not.toContain(uploadedPhotoId)
+  })
+
+  test('DELETE unknown photo → 404', async ({ request }) => {
+    const r = await request.delete(
+      `/api/v1/objects/${photoObjectId}/photos/00000000-0000-0000-0000-000000000000`,
+      { headers: apiHeaders() }
+    )
+    expect(r.status()).toBe(404)
+  })
+
+  test('GET photos without auth → 401', async ({ request }) => {
+    const r = await request.get(`/api/v1/objects/${photoObjectId}/photos`)
+    expect(r.status()).toBe(401)
+  })
+
+  test('PATCH returns the actual post-write state (no silent no-op)', async ({ request }) => {
+    const uniqueTitle = `atomic-write-check-${RUN_TAG}`
+    const r = await request.patch(`/api/v1/objects/${photoObjectId}`, {
+      headers: apiHeaders(),
+      data: { title: uniqueTitle },
+    })
+    expect(r.status()).toBe(200)
+    const body = await r.json()
+    // Response must reflect what was written — not stale data
+    expect(body.title).toBe(uniqueTitle)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/v1/openapi.json
 // ─────────────────────────────────────────────────────────────────────────────
 

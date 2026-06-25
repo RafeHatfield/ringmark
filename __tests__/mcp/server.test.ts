@@ -25,9 +25,11 @@ const TEST_BASE = 'http://test.local/api/v1'
 const EXPECTED_TOOLS = [
   'add_child',
   'create_object',
+  'delete_photo',
   'get_lineage',
   'get_object',
   'list_objects',
+  'list_photos',
   'publish_object',
   'save_story',
   'search_objects',
@@ -60,7 +62,7 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ringmark MCP server — manifest', () => {
-  it('tools/list returns all 10 expected tools', async () => {
+  it('tools/list returns all 12 expected tools', async () => {
     const { client, cleanup } = await connectPair()
     try {
       const { tools } = await client.listTools()
@@ -224,6 +226,83 @@ describe('ringmark MCP server — get_object behaviour', () => {
       assert.equal(capturedAuth, `Bearer ${TEST_KEY}`)
     } finally {
       global.fetch = original
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — list_photos + delete_photo', () => {
+  it('list_photos returns a numbered list with IDs', async () => {
+    const restore = mockFetch(
+      Response.json({
+        data: [
+          { id: 'photo-aaa', caption: 'Bark crust', is_public: true, sort_order: 0, signed_url: null },
+          { id: 'photo-bbb', caption: null, is_public: true, sort_order: 1, signed_url: null },
+        ],
+        total: 2,
+      })
+    )
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'list_photos', arguments: { object_id: 'RH4' } })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      const text = textOf(result)
+      assert.ok(text.includes('photo-aaa'), `expected photo ID, got: ${text}`)
+      assert.ok(text.includes('Bark crust'), `expected caption, got: ${text}`)
+      assert.ok(text.includes('2 photo'), `expected count, got: ${text}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('list_photos with no photos returns a clear message', async () => {
+    const restore = mockFetch(Response.json({ data: [], total: 0 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'list_photos', arguments: { object_id: 'RH4' } })
+      assert.ok(!result.isError)
+      assert.ok(textOf(result).includes('No photos'), `expected no-photos message, got: ${textOf(result)}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('delete_photo sends DELETE to the correct URL and reports success', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return new Response(null, { status: 204 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'delete_photo',
+        arguments: { object_id: 'RH4', photo_id: 'photo-aaa' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.includes('/objects/RH4/photos/photo-aaa'), `wrong URL: ${capturedUrl}`)
+      assert.ok(textOf(result).includes('deleted'), `expected deleted confirmation, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('delete_photo surfaces API error (e.g. photo not found)', async () => {
+    const restore = mockFetch(Response.json({ error: 'Photo not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'delete_photo',
+        arguments: { object_id: 'RH4', photo_id: '00000000-0000-0000-0000-000000000000' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 404 photo')
+      assert.ok(textOf(result).includes('Photo not found'), `expected error message, got: ${textOf(result)}`)
+    } finally {
+      restore()
       await cleanup()
     }
   })

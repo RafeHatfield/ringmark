@@ -95,25 +95,18 @@ export async function PATCH(
 
   payload.updated_at = new Date().toISOString()
 
-  const { error: updateError } = await db
+  // Atomic update + read-back: .select().single() returns the post-write row in one
+  // round-trip and errors if 0 rows matched (catches silent no-ops from bad WHERE conditions).
+  const { data: updated, error: updateError } = await db
     .from('wood_objects')
     .update(payload)
     .eq('id', obj.id)
     .eq('account_id', account.id)
-
-  if (updateError) {
-    return Response.json({ error: updateError.message }, { status: 500 })
-  }
-
-  // Fetch updated object to return
-  const { data: updated, error: fetchError } = await db
-    .from('wood_objects')
     .select('*')
-    .eq('id', obj.id)
     .single()
 
-  if (fetchError || !updated) {
-    return Response.json({ error: 'Update succeeded but could not fetch result' }, { status: 500 })
+  if (updateError || !updated) {
+    return Response.json({ error: updateError?.message ?? 'Update failed' }, { status: 500 })
   }
 
   return Response.json(updated)

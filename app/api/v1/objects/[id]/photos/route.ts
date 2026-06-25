@@ -5,6 +5,60 @@ import { resolveObject } from '@/lib/resolve-object'
 const BUCKET = 'object-photos'
 const SIGNED_URL_EXPIRY_SECONDS = 3600
 
+// ── GET /api/v1/objects/:id/photos ───────────────────────────────────────────
+
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authError = verifyApiKey(request)
+  if (authError) return authError
+
+  const { id } = await params
+  const db = createServiceClient()
+  const account = await getAccount(db)
+
+  const object = await resolveObject(id, account.id, db)
+  if (!object) {
+    return Response.json({ error: 'Object not found' }, { status: 404 })
+  }
+
+  const { data: photos, error } = await db
+    .from('object_photos')
+    .select('id, caption, is_public, sort_order, storage_path, created_at')
+    .eq('object_id', object.id)
+    .eq('account_id', account.id)
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 })
+  }
+
+  const rows = photos ?? []
+  const paths = rows.map(p => p.storage_path)
+  const signedByPath = new Map<string, string>()
+
+  if (paths.length > 0) {
+    const { data: signed } = await db.storage
+      .from(BUCKET)
+      .createSignedUrls(paths, SIGNED_URL_EXPIRY_SECONDS)
+    for (const s of (signed ?? [])) {
+      if (s.signedUrl && s.path) signedByPath.set(s.path, s.signedUrl)
+    }
+  }
+
+  const data = rows.map(p => ({
+    id: p.id,
+    caption: p.caption,
+    is_public: p.is_public,
+    sort_order: p.sort_order,
+    signed_url: signedByPath.get(p.storage_path) ?? null,
+    created_at: p.created_at,
+  }))
+
+  return Response.json({ data, total: data.length })
+}
+
 // ── POST /api/v1/objects/:id/photos ──────────────────────────────────────────
 
 export async function POST(
