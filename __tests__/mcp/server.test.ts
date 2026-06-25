@@ -25,6 +25,7 @@ const TEST_BASE = 'http://test.local/api/v1'
 const EXPECTED_TOOLS = [
   'add_child',
   'create_object',
+  'get_lineage',
   'get_object',
   'list_objects',
   'publish_object',
@@ -59,7 +60,7 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ringmark MCP server — manifest', () => {
-  it('tools/list returns all 9 expected tools', async () => {
+  it('tools/list returns all 10 expected tools', async () => {
     const { client, cleanup } = await connectPair()
     try {
       const { tools } = await client.listTools()
@@ -223,6 +224,45 @@ describe('ringmark MCP server — get_object behaviour', () => {
       assert.equal(capturedAuth, `Bearer ${TEST_KEY}`)
     } finally {
       global.fetch = original
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — get_lineage', () => {
+  it('formats the chain as a readable text list ordered root-first', async () => {
+    const restore = mockFetch(
+      Response.json({
+        steps: [
+          { workshop_id: 'RH9', step_label: 'The tree', public_story: 'A lightning bolt hit this oak.', photo_count: 2, thumbnail_url: null },
+          { workshop_id: 'RH9-1', step_label: 'Cut into slabs', public_story: 'Extraordinary colour inside.', photo_count: 1, thumbnail_url: null },
+          { workshop_id: 'RH9-4', step_label: 'Finished', public_story: null, photo_count: 3, thumbnail_url: null },
+        ],
+      })
+    )
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'get_lineage', arguments: { id: 'RH9-4' } })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      const text = textOf(result)
+      assert.ok(text.includes('RH9'), `expected RH9 in output, got: ${text}`)
+      assert.ok(text.includes('RH9-4'), `expected RH9-4 in output, got: ${text}`)
+      assert.ok(text.includes('lightning bolt'), `expected story snippet, got: ${text}`)
+      assert.ok(text.includes('2 photos'), `expected photo count, got: ${text}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('returns a not-found error when the object does not exist', async () => {
+    const restore = mockFetch(Response.json({ error: 'Object not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'get_lineage', arguments: { id: 'NOPE' } })
+      assert.ok(result.isError, 'expected isError: true for a missing object')
+    } finally {
+      restore()
       await cleanup()
     }
   })

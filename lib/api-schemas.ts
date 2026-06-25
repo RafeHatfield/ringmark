@@ -146,6 +146,27 @@ export const CreateChildSchema = z
   })
   .openapi('CreateChild')
 
+// ── Lineage step ─────────────────────────────────────────────────────────────
+
+export const LineageStepSchema = z
+  .object({
+    id: z.string().uuid(),
+    workshop_id: z.string().openapi({ example: 'RH9-1' }),
+    object_type: objectTypeEnum,
+    step_label: z.string().openapi({ example: 'Cut into slabs', description: 'title if set, else object_type label' }),
+    public_story: z.string().nullable().openapi({ description: 'Step narrative shown in the journey timeline' }),
+    status: objectStatusEnum.nullable(),
+    photo_count: z.number().int().openapi({ example: 3 }),
+    thumbnail_url: z.string().nullable().openapi({ description: 'Signed URL for the first public photo, valid 1 hour' }),
+  })
+  .openapi('LineageStep')
+
+export const LineageResponseSchema = z
+  .object({
+    steps: z.array(LineageStepSchema).openapi({ description: 'Ancestor chain ordered root → requested object' }),
+  })
+  .openapi('LineageResponse')
+
 // ── Photo response ────────────────────────────────────────────────────────────
 
 export const PhotoSchema = z

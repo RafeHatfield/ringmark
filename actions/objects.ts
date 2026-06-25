@@ -16,6 +16,7 @@ export type CreateObjectData = {
   species_confidence?: SpeciesConfidence | null
   status?: ObjectStatus | null
   private_notes?: string | null
+  public_story?: string | null
 }
 
 export async function createObject(
@@ -65,6 +66,7 @@ export async function createObject(
       species_confidence: data.species_confidence || null,
       status: data.status || null,
       private_notes: data.private_notes?.trim() || null,
+      public_story: data.public_story?.trim() || null,
     })
     .select('id')
     .single()

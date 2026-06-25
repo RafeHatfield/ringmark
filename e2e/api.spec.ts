@@ -731,6 +731,87 @@ test.describe('POST /api/v1/objects/:id/children', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/objects/:id/lineage
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('GET /api/v1/objects/:id/lineage', () => {
+  let parentId = ''
+  let childId = ''
+
+  test.beforeAll(async ({ request }) => {
+    const h = apiHeaders()
+    const rp = await request.post('/api/v1/objects', {
+      headers: h,
+      data: { object_type: 'source', workshop_id: `${RUN_TAG}LINROOT`, title: 'Lineage root', species: 'Cherry' },
+    })
+    expect(rp.status()).toBe(201)
+    parentId = (await rp.json()).id
+    createdIds.push(parentId)
+
+    const rc = await request.post(`/api/v1/objects/${parentId}/children`, {
+      headers: h,
+      data: { object_type: 'slab', title: 'Cut into slabs' },
+    })
+    expect(rc.status()).toBe(201)
+    childId = (await rc.json()).id
+    createdIds.push(childId)
+  })
+
+  test('returns steps array ordered root-first', async ({ request }) => {
+    const r = await request.get(`/api/v1/objects/${childId}/lineage`, { headers: apiHeaders() })
+    expect(r.status()).toBe(200)
+    const body = await r.json()
+    expect(Array.isArray(body.steps)).toBe(true)
+    expect(body.steps.length).toBe(2)
+    expect(body.steps[0].id).toBe(parentId)
+    expect(body.steps[1].id).toBe(childId)
+  })
+
+  test('each step has required shape fields', async ({ request }) => {
+    const r = await request.get(`/api/v1/objects/${childId}/lineage`, { headers: apiHeaders() })
+    const body = await r.json()
+    for (const step of body.steps) {
+      expect(step).toHaveProperty('id')
+      expect(step).toHaveProperty('workshop_id')
+      expect(step).toHaveProperty('object_type')
+      expect(step).toHaveProperty('step_label')
+      expect(step).toHaveProperty('public_story')
+      expect(step).toHaveProperty('photo_count')
+      expect(step).toHaveProperty('thumbnail_url')
+    }
+  })
+
+  test('step_label uses title when set, else object_type label', async ({ request }) => {
+    const r = await request.get(`/api/v1/objects/${childId}/lineage`, { headers: apiHeaders() })
+    const body = await r.json()
+    // Root has title "Lineage root"
+    expect(body.steps[0].step_label).toBe('Lineage root')
+    // Child has title "Cut into slabs"
+    expect(body.steps[1].step_label).toBe('Cut into slabs')
+  })
+
+  test('root object lineage returns just itself', async ({ request }) => {
+    const r = await request.get(`/api/v1/objects/${parentId}/lineage`, { headers: apiHeaders() })
+    expect(r.status()).toBe(200)
+    const body = await r.json()
+    expect(body.steps.length).toBe(1)
+    expect(body.steps[0].id).toBe(parentId)
+  })
+
+  test('unknown id → 404', async ({ request }) => {
+    const r = await request.get('/api/v1/objects/00000000-0000-0000-0000-000000000000/lineage', {
+      headers: apiHeaders(),
+    })
+    expect(r.status()).toBe(404)
+  })
+
+  test('missing auth → 401', async ({ request }) => {
+    const r = await request.get(`/api/v1/objects/${childId}/lineage`)
+    expect(r.status()).toBe(401)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /api/v1/objects/:id/photos
 // ─────────────────────────────────────────────────────────────────────────────
 

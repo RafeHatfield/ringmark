@@ -25,6 +25,7 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
   const [status, setStatus] = useState<ObjectStatus | ''>('')
   const [title, setTitle] = useState('')
   const [species, setSpecies] = useState('')
+  const [stepNotes, setStepNotes] = useState('')
   const [privateNotes, setPrivateNotes] = useState('')
   const [formError, setFormError] = useState('')
 
@@ -57,6 +58,7 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
         species: species || null,
         status: status || null,
         private_notes: privateNotes || null,
+        public_story: stepNotes || null,
       })
       if (result.error) {
         setFormError(result.error)
@@ -137,6 +139,18 @@ export default function ChildObjectForm({ parentId, parentWorkshopId, suggestedI
           className={fieldClass}
           placeholder="Inherits from parent if blank"
           maxLength={100}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1.5">
+          Step notes <span className="text-xs text-bark font-normal ml-1">optional · shown in journey</span>
+        </label>
+        <textarea
+          value={stepNotes}
+          onChange={e => setStepNotes(e.target.value)}
+          className={`${fieldClass} min-h-[80px] resize-y`}
+          placeholder="What's notable about this step?"
         />
       </div>
 

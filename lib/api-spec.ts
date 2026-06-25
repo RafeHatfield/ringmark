@@ -16,6 +16,8 @@ import {
   CreateObjectSchema,
   PatchObjectSchema,
   CreateChildSchema,
+  LineageStepSchema,
+  LineageResponseSchema,
   PhotoSchema,
   ErrorSchema,
   objectTypeEnum,
@@ -32,6 +34,8 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register('CreateObject', CreateObjectSchema)
   registry.register('PatchObject', PatchObjectSchema)
   registry.register('CreateChild', CreateChildSchema)
+  registry.register('LineageStep', LineageStepSchema)
+  registry.register('LineageResponse', LineageResponseSchema)
   registry.register('Photo', PhotoSchema)
   registry.register('Error', ErrorSchema)
 
@@ -208,6 +212,24 @@ function buildRegistry(): OpenAPIRegistry {
       400: {
         description: 'Validation error',
         content: { 'application/json': { schema: ErrorSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  // ── GET /api/v1/objects/:id/lineage ────────────────────────────────────────
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/objects/{id}/lineage',
+    tags: ['Objects'],
+    summary: 'Get lineage chain',
+    description: 'Returns the full ancestry chain from the root object down to the requested object, ordered root-first. Each step includes its step label (title if set, else object type), public_story text, photo count, and a 1-hour signed thumbnail URL.',
+    security,
+    request: { params: z.object({ id: idParam.schema }) },
+    responses: {
+      200: {
+        description: 'Lineage chain ordered root → requested object',
+        content: { 'application/json': { schema: LineageResponseSchema } },
       },
       ...errorResponses,
     },

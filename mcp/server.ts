@@ -309,6 +309,28 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
     }
   )
 
+  // ── get_lineage ───────────────────────────────────────────────────────────
+
+  server.tool(
+    'get_lineage',
+    'Get the full journey chain for an object — from root source down to the requested piece. ' +
+    'Returns each step with its label, step notes, photo count, and thumbnail URL, ordered root-first. ' +
+    'Use this to understand an object\'s complete history before writing a public story.',
+    { id: z.string().describe('Workshop ID (e.g. RH9-4) or UUID of any object in the chain') },
+    async ({ id }) => {
+      const data = await api('GET', `/objects/${encodeURIComponent(id)}/lineage`) as {
+        steps: Array<{ workshop_id: string; step_label: string; public_story: string | null; photo_count: number }>
+      }
+      const lines = data.steps.map((step, i) => {
+        const prefix = i === 0 ? '◉' : i === data.steps.length - 1 ? '●' : '○'
+        const note = step.public_story ? ` — "${step.public_story.slice(0, 80)}${step.public_story.length > 80 ? '…' : ''}"` : ''
+        const photos = step.photo_count > 0 ? ` [${step.photo_count} photo${step.photo_count > 1 ? 's' : ''}]` : ''
+        return `${prefix} ${step.workshop_id}  ${step.step_label}${photos}${note}`
+      })
+      return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    }
+  )
+
   // ── upload_photo ──────────────────────────────────────────────────────────
 
   server.tool(

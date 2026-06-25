@@ -98,6 +98,7 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
   const [dimensions, setDimensions] = useState(object.dimensions_text ?? '')
   const [finish, setFinish] = useState(object.finish ?? '')
   const [location, setLocation] = useState(object.location_text ?? '')
+  const [stepNotes, setStepNotes] = useState(object.public_story ?? '')
   const [privateNotes, setPrivateNotes] = useState(object.private_notes ?? '')
   const [formError, setFormError] = useState('')
 
@@ -145,6 +146,7 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
         dimensions_text: dimensions || null,
         finish: finish || null,
         location_text: location || null,
+        public_story: stepNotes || null,
         private_notes: privateNotes || null,
       })
       if (result.error) {
@@ -288,6 +290,13 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
           Location <span className="text-xs text-bark font-normal ml-1">private · optional</span>
         </label>
         <input value={location} onChange={e => setLocation(e.target.value)} className={fieldClass} placeholder="e.g. Shelf 3, green bin" maxLength={200} />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1.5">
+          Step notes <span className="text-xs text-bark font-normal ml-1">optional · shown in journey</span>
+        </label>
+        <textarea value={stepNotes} onChange={e => setStepNotes(e.target.value)} className={`${fieldClass} min-h-[80px] resize-y`} placeholder="What's notable about this step?" />
       </div>
 
       <div>
