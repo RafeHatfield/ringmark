@@ -162,3 +162,90 @@ test('anonymous user visiting admin detail page is redirected to /login', async 
 
   await ctx.close()
 })
+
+// ── Journey rendering ─────────────────────────────────────────────────────────
+//
+// These tests catch the regression where the public page only showed the leaf
+// object. A multi-stage lineage must render all stages on the journey page.
+// Without these tests, that bug is invisible until a real buyer reports it.
+
+let journeySourceId = ''
+let journeyChildId = ''
+let journeyChildSlug = ''
+const SOURCE_STORY = 'JOURNEY_SOURCE_STORY_E2E_CANARY'
+const CHILD_STORY  = 'JOURNEY_CHILD_STORY_E2E_CANARY'
+
+test.beforeAll(async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: AUTH_STATE })
+  const page = await ctx.newPage()
+
+  // Create source with step notes
+  await page.goto('/objects/new?type=source')
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
+  journeySourceId = page.url().split('/objects/')[1]
+
+  await page.goto(`/objects/${journeySourceId}/edit`)
+  await page.getByPlaceholder("What's notable about this step?").fill(SOURCE_STORY)
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await page.waitForURL(`/objects/${journeySourceId}`)
+
+  // Create child with step notes
+  await page.getByRole('link', { name: '+ Add Child' }).click()
+  await page.waitForURL(/\/child\/new/)
+  await page.locator('select').first().selectOption('finished_bowl')
+  await page.getByPlaceholder("What's notable about this step?").fill(CHILD_STORY)
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
+  journeyChildId = page.url().split('/objects/')[1]
+
+  // Publish the child — it becomes the QR-code piece
+  await page.goto(`/objects/${journeyChildId}/story`)
+  await page.getByPlaceholder('e.g. Lynn Valley Maple').fill('Journey Test Bowl')
+  await page.getByRole('button', { name: 'Save draft' }).click()
+  await expect(page.getByText('Saved.')).toBeVisible()
+  await page.getByRole('button', { name: 'Publish' }).click()
+  await expect(page.getByText('Published')).toBeVisible()
+  const href = await page.locator('a[href^="/p/"]').getAttribute('href')
+  journeyChildSlug = href?.replace('/p/', '') ?? ''
+
+  await ctx.close()
+})
+
+test('journey: "Its life so far" section appears on a multi-stage piece', async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: undefined })
+  const page = await ctx.newPage()
+  await page.goto(`/p/${journeyChildSlug}`)
+  await expect(page.getByText('Its life so far', { exact: false })).toBeVisible()
+  await ctx.close()
+})
+
+test('journey: source step notes appear on the child piece\'s public page', async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: undefined })
+  const page = await ctx.newPage()
+  await page.goto(`/p/${journeyChildSlug}`)
+  // The source's step notes (public_story) must be visible in the timeline
+  await expect(page.getByText(SOURCE_STORY)).toBeVisible()
+  await ctx.close()
+})
+
+test('journey: child step notes appear on the public page', async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: undefined })
+  const page = await ctx.newPage()
+  await page.goto(`/p/${journeyChildSlug}`)
+  await expect(page.getByText(CHILD_STORY)).toBeVisible()
+  await ctx.close()
+})
+
+test('journey: single-stage piece has no "Its life so far" section', async ({ browser }) => {
+  // publishedSlug is a root object with no children — should not show the timeline header
+  const ctx = await browser.newContext({ storageState: undefined })
+  const page = await ctx.newPage()
+  await page.goto(`/p/${publishedSlug}`)
+  await expect(page.getByText('Its life so far', { exact: false })).not.toBeVisible()
+  await ctx.close()
+})
