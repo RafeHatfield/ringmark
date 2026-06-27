@@ -1,6 +1,33 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+
+export const metadata: Metadata = {
+  title: 'Ringmark — Keep the story with the piece',
+  description:
+    'Ringmark helps woodturners and craft makers track a piece from raw log to finished bowl. ' +
+    'Document every step with photos, write the story, and share it via QR code so buyers know exactly where it came from.',
+  keywords: [
+    'woodturning', 'woodturner tool', 'craft provenance', 'handmade bowl story',
+    'QR code for handmade items', 'wood bowl tracking', 'maker story',
+  ],
+  openGraph: {
+    title: 'Ringmark — Keep the story with the piece',
+    description:
+      'Track your woodturning from log to finished bowl. Document every step, write the story, share via QR code.',
+    url: 'https://ringmark.org',
+    siteName: 'Ringmark',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Ringmark — Keep the story with the piece',
+    description:
+      'Track your woodturning from log to finished bowl. Document every step, write the story, share via QR code.',
+  },
+  alternates: { canonical: 'https://ringmark.org' },
+}
 
 export default async function LandingPage() {
   const supabase = await createClient()

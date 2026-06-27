@@ -13,8 +13,8 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'),
-  title: 'Ringmark',
-  description: 'Track the story of wood from source to finished piece.',
+  title: 'Ringmark — Keep the story with the piece',
+  description: 'Ringmark helps woodturners and craft makers track a piece from raw log to finished bowl, with photos at every step and a QR code so buyers know exactly where it came from.',
   manifest: '/manifest.json',
   icons: {
     icon: [
