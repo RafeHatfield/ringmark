@@ -7,7 +7,18 @@ import { z } from 'zod'
  * Separated from the transport startup in index.ts so tests can import it
  * without triggering stdio or process.exit.
  */
-export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000): McpServer {
+interface ServerOptions {
+  /** When true, file_path uploads are disabled (hosted/serverless environment). */
+  hosted?: boolean
+}
+
+export function createServer(
+  apiKey: string,
+  apiBase: string,
+  timeoutMs = 30_000,
+  options: ServerOptions = {},
+): McpServer {
+  const { hosted = false } = options
 
   // ── API client ────────────────────────────────────────────────────────────
 
@@ -393,8 +404,9 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
         'Works with iCloud shared links, Google Photos, Dropbox, Imgur, CDN URLs, etc.'
       ),
       file_path: z.string().optional().describe(
-        'Absolute path to an image file on the MCP server host (the user\'s local disk). ' +
-        'E.g. /Users/rafe/Downloads/IMG_1719.jpeg'
+        hosted
+          ? 'NOT AVAILABLE on the hosted server — local file paths cannot be read remotely. Use image_url or image_data instead.'
+          : 'Absolute path to an image file on the MCP server host (the user\'s local disk). E.g. /Users/rafe/Downloads/IMG_1719.jpeg'
       ),
       image_data: z.string().optional().describe(
         'Base64-encoded image bytes (no data: URI prefix). Last resort — impractical for images over ~100 KB. ' +
@@ -430,6 +442,12 @@ export function createServer(apiKey: string, apiBase: string, timeoutMs = 30_000
         const urlPath = new URL(image_url).pathname
         uploadFilename = filename ?? (urlPath.split('/').pop()?.split('?')[0] || `photo-${Date.now()}.jpg`)
       } else if (file_path) {
+        if (hosted) {
+          throw new Error(
+            'file_path is not available on the hosted MCP server — the server cannot read your local disk.\n' +
+            'Use image_url (a public link) or image_data (base64) to upload photos.'
+          )
+        }
         // Path on the MCP server host (the user's local machine under Claude Desktop).
         try {
           fileBuffer = readFileSync(file_path)
