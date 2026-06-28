@@ -155,7 +155,7 @@ function buildRegistry(): OpenAPIRegistry {
     path: '/api/v1/objects/{id}',
     tags: ['Objects'],
     summary: 'Update an object',
-    description: 'Partial update — only pass the fields you want to change. `public_slug` and `account_id` are not accepted. To publish or unpublish, set `is_published`.',
+    description: 'Partial update — only pass the fields you want to change. `public_slug` and `account_id` are not accepted. `workshop_id` can be renamed; returns 409 if the new ID is already in use. To publish or unpublish, set `is_published`.',
     security,
     request: {
       params: z.object({ id: idParam.schema }),
@@ -171,6 +171,10 @@ function buildRegistry(): OpenAPIRegistry {
       },
       400: {
         description: 'Validation error',
+        content: { 'application/json': { schema: ErrorSchema } },
+      },
+      409: {
+        description: 'Workshop ID already in use',
         content: { 'application/json': { schema: ErrorSchema } },
       },
       ...errorResponses,

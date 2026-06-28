@@ -127,12 +127,20 @@ export const PatchObjectSchema = z
       .boolean()
       .optional()
       .openapi({ description: 'Set true to publish; false to unpublish' }),
+    workshop_id: z
+      .string()
+      .min(1)
+      .optional()
+      .openapi({
+        example: 'RH3',
+        description: 'Rename the workshop ID. Must be unique within the account. Renaming a root does not auto-rename its children — update each child separately.',
+      }),
     parent_id: z
       .string()
       .nullable()
       .optional()
       .openapi({ description: 'Workshop ID or UUID of the new parent. Pass null to make this a root object.' }),
-    // public_slug, account_id, workshop_id, workshop_id_lower are intentionally excluded
+    // public_slug, account_id, and workshop_id_lower are intentionally excluded (lower is derived)
   })
   .openapi('PatchObject')
 

@@ -62,6 +62,28 @@ export async function PATCH(
 
   // Build update payload from only the fields present in the body
   const payload: WoodObjectUpdate = {}
+
+  if (parsed.workshop_id !== undefined) {
+    const newLower = parsed.workshop_id.toLowerCase()
+    // Skip the uniqueness check when the ID isn't actually changing
+    if (newLower !== obj.workshop_id_lower) {
+      const { data: conflict } = await db
+        .from('wood_objects')
+        .select('id')
+        .eq('account_id', account.id)
+        .eq('workshop_id_lower', newLower)
+        .maybeSingle()
+      if (conflict) {
+        return Response.json(
+          { error: `Workshop ID already in use: ${parsed.workshop_id}` },
+          { status: 409 }
+        )
+      }
+    }
+    payload.workshop_id = parsed.workshop_id
+    payload.workshop_id_lower = newLower
+  }
+
   if (parsed.object_type !== undefined) payload.object_type = parsed.object_type
   if (parsed.status !== undefined) payload.status = parsed.status
   if (parsed.title !== undefined) payload.title = parsed.title || null

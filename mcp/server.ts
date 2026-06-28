@@ -235,6 +235,9 @@ export function createServer(
     'use save_story for those. It does NOT toggle publish state — use publish_object for that.',
     {
       id: z.string().describe('Workshop ID or UUID'),
+      workshop_id: z.string().optional().describe(
+        'Rename the workshop ID (e.g. "RH3"). Must be unique. Renaming a root does not auto-rename children — update each child separately.'
+      ),
       object_type: z.string().optional(),
       status: z.string().optional(),
       title: z.string().optional(),
@@ -245,8 +248,9 @@ export function createServer(
         'Workshop ID or UUID of the new parent. Pass null to make this object a root with no parent.'
       ),
     },
-    async ({ id, object_type, status, title, species, location_text, private_notes, parent_id }) => {
+    async ({ id, workshop_id, object_type, status, title, species, location_text, private_notes, parent_id }) => {
       const body: Record<string, unknown> = {}
+      if (workshop_id !== undefined) body.workshop_id = workshop_id
       if (object_type !== undefined) body.object_type = object_type
       if (status !== undefined) body.status = status
       if (title !== undefined) body.title = title
