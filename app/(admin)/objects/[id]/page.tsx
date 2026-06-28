@@ -171,6 +171,14 @@ export default async function ObjectDetailPage({
                 </ul>
               </div>
             )}
+            <div className="px-4 py-3 border-t border-hairline">
+              <Link
+                href={`/objects/${object.root_id ?? id}/tree`}
+                className="text-xs text-bark hover:text-ink underline"
+              >
+                View full tree →
+              </Link>
+            </div>
           </div>
         </section>
       )}

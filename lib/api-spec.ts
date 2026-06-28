@@ -84,6 +84,9 @@ function buildRegistry(): OpenAPIRegistry {
         type: objectTypeEnum.optional().openapi({ description: 'Filter by object type' }),
         status: objectStatusEnum.optional().openapi({ description: 'Filter by status' }),
         published: z.enum(['true', 'false']).optional().openapi({ description: 'Filter by publish state' }),
+        roots: z.enum(['true', 'false']).optional().openapi({
+          description: 'If "true", return only root objects (parent_id is null)',
+        }),
         limit: z.string().optional().openapi({ description: 'Max results, 1–50 (default 20)', example: '20' }),
         offset: z.string().optional().openapi({ description: 'Pagination offset (default 0)', example: '0' }),
       }),

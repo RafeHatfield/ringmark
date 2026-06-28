@@ -3,6 +3,8 @@ import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createClient } from '@/lib/supabase/server'
 import { OBJECT_TYPES } from '@/lib/constants'
 import { SearchInput } from '@/components/search-input'
+import { rollupRoots } from '@/lib/tree-rollup'
+import { RootCard } from '@/components/root-card'
 
 export default async function WorkshopPage({
   searchParams,
@@ -15,7 +17,10 @@ export default async function WorkshopPage({
 
   const query = q?.trim().slice(0, 100) ?? ''
 
+  // Search branch: flat list of matching objects
   let objects: { id: string; workshop_id: string; object_type: string; status: string | null; title: string | null }[] | null = null
+  // No-search branch: root-centric summaries
+  let summaries: ReturnType<typeof rollupRoots> = []
 
   if (query) {
     const { data } = await supabase
@@ -27,13 +32,11 @@ export default async function WorkshopPage({
       .limit(30)
     objects = data
   } else {
-    const { data } = await supabase
+    const { data: allNodes } = await supabase
       .from('wood_objects')
-      .select('id, workshop_id, object_type, status, title')
+      .select('id, workshop_id, object_type, status, title, species, parent_id, root_id, updated_at')
       .eq('account_id', account.id)
-      .order('updated_at', { ascending: false })
-      .limit(10)
-    objects = data
+    summaries = rollupRoots(allNodes ?? [])
   }
 
   return (
@@ -51,46 +54,67 @@ export default async function WorkshopPage({
         </Link>
       </div>
 
-      {!objects || objects.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-bark text-sm">
-            {query ? `No results for "${query}".` : 'No pieces yet. Add your first source to get started.'}
-          </p>
-        </div>
+      {query ? (
+        // ── Search branch ─────────────────────────────────────────────────────
+        !objects || objects.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-bark text-sm">No results for &ldquo;{query}&rdquo;.</p>
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-xs text-bark tracking-wider mb-2">
+              Results for &ldquo;{query}&rdquo;
+            </h2>
+            <ul className="divide-y divide-hairline">
+              {objects.map((obj) => {
+                const typeLabel = OBJECT_TYPES.find((t) => t.value === obj.object_type)?.label ?? obj.object_type
+                return (
+                  <li key={obj.id}>
+                    <Link
+                      href={`/objects/${obj.id}`}
+                      className="flex items-center justify-between py-3 hover:opacity-70 transition-opacity gap-3"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-mono text-sm font-medium">{obj.workshop_id}</span>
+                        {obj.title && (
+                          <span className="text-xs text-bark ml-2 truncate">{obj.title}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {obj.status && (
+                          <span className="text-xs text-bark capitalize">
+                            {obj.status.replace('_', ' ')}
+                          </span>
+                        )}
+                        <span className="text-xs text-bark">{typeLabel}</span>
+                      </div>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )
       ) : (
-        <div>
-          <h2 className="text-xs text-bark tracking-wider mb-2">
-            {query ? `Results for "${query}"` : 'Recent'}
-          </h2>
-          <ul className="divide-y divide-hairline">
-            {objects.map((obj) => {
-              const typeLabel = OBJECT_TYPES.find((t) => t.value === obj.object_type)?.label ?? obj.object_type
-              return (
-                <li key={obj.id}>
-                  <Link
-                    href={`/objects/${obj.id}`}
-                    className="flex items-center justify-between py-3 hover:opacity-70 transition-opacity gap-3"
-                  >
-                    <div className="min-w-0">
-                      <span className="font-mono text-sm font-medium">{obj.workshop_id}</span>
-                      {obj.title && (
-                        <span className="text-xs text-bark ml-2 truncate">{obj.title}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {obj.status && (
-                        <span className="text-xs text-bark capitalize">
-                          {obj.status.replace('_', ' ')}
-                        </span>
-                      )}
-                      <span className="text-xs text-bark">{typeLabel}</span>
-                    </div>
-                  </Link>
+        // ── No-search branch: root-centric summaries ──────────────────────────
+        summaries.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-bark text-sm">
+              No pieces yet. Add your first source to get started.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-xs text-bark tracking-wider mb-2">Pieces</h2>
+            <ul className="divide-y divide-hairline">
+              {summaries.map((s) => (
+                <li key={s.root.id}>
+                  <RootCard summary={s} />
                 </li>
-              )
-            })}
-          </ul>
-        </div>
+              ))}
+            </ul>
+          </div>
+        )
       )}
     </main>
   )

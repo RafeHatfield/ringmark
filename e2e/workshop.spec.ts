@@ -141,6 +141,48 @@ test('editing type and status on the same record (transform, no new ID)', async 
   await expect(page.getByRole('combobox')).toHaveValue('rough_turned')
 })
 
+// ── Root-centric navigation ───────────────────────────────────────────────────
+
+test('home shows root but not child IDs when no search', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByText(sourceWorkshopId, { exact: true })).toBeVisible()
+  await expect(page.getByText(childWorkshopId, { exact: true })).not.toBeVisible()
+})
+
+test('root card shows piece count', async ({ page }) => {
+  await page.goto('/')
+  // 3 nodes in tree (source + child + grandchild) → "3 pieces"
+  await expect(page.getByText(/3 pieces/i)).toBeVisible()
+})
+
+test('"View full tree" link appears on root with children', async ({ page }) => {
+  await page.goto(`/objects/${sourceId}`)
+  await expect(page.getByRole('link', { name: /view full tree/i })).toBeVisible()
+})
+
+test('"View full tree" link appears on child', async ({ page }) => {
+  await page.goto(`/objects/${childId}`)
+  await expect(page.getByRole('link', { name: /view full tree/i })).toBeVisible()
+})
+
+test('tree page shows all tree nodes', async ({ page }) => {
+  await page.goto(`/objects/${sourceId}/tree`)
+  await expect(page.getByText(sourceWorkshopId).first()).toBeVisible()
+  await expect(page.getByText(childWorkshopId).first()).toBeVisible()
+  await expect(page.getByText(grandchildWorkshopId).first()).toBeVisible()
+})
+
+test('tree page node links to detail page', async ({ page }) => {
+  await page.goto(`/objects/${sourceId}/tree`)
+  await page.getByRole('link', { name: childWorkshopId }).click()
+  await expect(page).toHaveURL(`/objects/${childId}`)
+})
+
+test('search returns non-root nodes', async ({ page }) => {
+  await page.goto(`/workshop?q=${encodeURIComponent(childWorkshopId)}`)
+  await expect(page.getByText(childWorkshopId, { exact: true })).toBeVisible()
+})
+
 // ── Workshop ID rename edge cases ─────────────────────────────────────────────
 
 test('renaming workshop ID persists after reload', async ({ page }) => {

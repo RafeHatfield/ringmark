@@ -47,9 +47,9 @@ test('search by title keyword shows matching objects', async ({ page }) => {
   await expect(page.getByText(sourceWorkshopId)).toBeVisible()
 })
 
-test('search with no query shows Recent list', async ({ page }) => {
+test('search with no query shows Pieces list', async ({ page }) => {
   await page.goto('/workshop')
-  await expect(page.getByText('Recent')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pieces' })).toBeVisible()
 })
 
 test('search with no results shows an informative empty state', async ({ page }) => {

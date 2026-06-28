@@ -21,6 +21,7 @@ export async function GET(request: Request) {
   const type = url.searchParams.get('type') ?? undefined
   const status = url.searchParams.get('status') ?? undefined
   const publishedParam = url.searchParams.get('published') ?? undefined
+  const rootsParam = url.searchParams.get('roots') ?? undefined
   const limitParam = url.searchParams.get('limit')
   const offsetParam = url.searchParams.get('offset')
 
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
   if (status) query = query.eq('status', status as ObjectStatus)
   if (publishedParam === 'true') query = query.eq('is_published', true)
   if (publishedParam === 'false') query = query.eq('is_published', false)
+  if (rootsParam === 'true') query = query.is('parent_id', null)
 
   const { data, error, count } = await query
 

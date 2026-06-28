@@ -1044,6 +1044,51 @@ test.describe('photo list + delete', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/v1/objects?roots=true
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('GET /api/v1/objects?roots filter', () => {
+  let childOfPrimaryId = ''
+
+  test.beforeAll(async ({ request }) => {
+    const h = apiHeaders()
+    // Create a child under primaryObjectId so we have a known non-root
+    const r = await request.post(`/api/v1/objects/${primaryObjectId}/children`, {
+      headers: h,
+      data: { object_type: 'log', title: 'Roots filter test child' },
+    })
+    expect(r.status()).toBe(201)
+    const body = await r.json()
+    childOfPrimaryId = body.id
+    createdIds.push(childOfPrimaryId)
+  })
+
+  test('?roots=true excludes child objects', async ({ request }) => {
+    const r = await request.get('/api/v1/objects?roots=true&limit=50', { headers: apiHeaders() })
+    expect(r.status()).toBe(200)
+    const body = await r.json()
+    const ids = body.data.map((o: { id: string }) => o.id)
+    expect(ids).not.toContain(childOfPrimaryId)
+  })
+
+  test('?roots=true includes root objects', async ({ request }) => {
+    const r = await request.get('/api/v1/objects?roots=true&limit=50', { headers: apiHeaders() })
+    expect(r.status()).toBe(200)
+    const body = await r.json()
+    const ids = body.data.map((o: { id: string }) => o.id)
+    expect(ids).toContain(primaryObjectId)
+  })
+
+  test('?roots=false returns 200 without error', async ({ request }) => {
+    const r = await request.get('/api/v1/objects?roots=false', { headers: apiHeaders() })
+    expect(r.status()).toBe(200)
+    const body = await r.json()
+    expect(body).toHaveProperty('data')
+    expect(Array.isArray(body.data)).toBe(true)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/v1/openapi.json
 // ─────────────────────────────────────────────────────────────────────────────
 
