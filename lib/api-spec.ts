@@ -295,6 +295,43 @@ function buildRegistry(): OpenAPIRegistry {
     },
   })
 
+  // ── PATCH /api/v1/objects/:id/photos/:photoId ──────────────────────────────
+  registry.registerPath({
+    method: 'patch',
+    path: '/api/v1/objects/{id}/photos/{photoId}',
+    tags: ['Photos'],
+    summary: 'Update photo caption',
+    description: 'Updates the caption on an existing photo. Does not affect the image file, sort order, or any other field. Pass an empty string or null to clear the caption.',
+    security,
+    request: {
+      params: z.object({
+        id: idParam.schema,
+        photoId: z.string().uuid().openapi({ description: 'Photo UUID' }),
+      }),
+      body: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: z.object({
+              caption: z.string().nullable().openapi({ description: 'New caption text. Empty string or null to clear.' }),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: 'Updated photo record with a 1-hour signed URL',
+        content: { 'application/json': { schema: PhotoSchema } },
+      },
+      400: {
+        description: 'Missing or invalid body',
+        content: { 'application/json': { schema: ErrorSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
   // ── DELETE /api/v1/objects/:id/photos/:photoId ─────────────────────────────
   registry.registerPath({
     method: 'delete',

@@ -364,6 +364,33 @@ export function createServer(
     }
   )
 
+  // ── update_photo ──────────────────────────────────────────────────────────
+
+  server.tool(
+    'update_photo',
+    'Update the caption of an existing photo without touching the image file or sort order. ' +
+    'Use list_photos first to find the photo_id.',
+    {
+      object_id: z.string().describe('Workshop ID (e.g. RH1) or UUID of the object the photo belongs to'),
+      photo_id: z.string().describe('UUID of the photo (from list_photos)'),
+      caption: z.string().describe('New caption text. Pass an empty string to clear the caption.'),
+    },
+    async ({ object_id, photo_id, caption }) => {
+      await api(
+        'PATCH',
+        `/objects/${encodeURIComponent(object_id)}/photos/${encodeURIComponent(photo_id)}`,
+        { caption }
+      )
+      const displayCaption = caption.trim() ? `"${caption.trim()}"` : '(cleared)'
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Caption updated for photo ${photo_id} on ${object_id}: ${displayCaption}`,
+        }],
+      }
+    }
+  )
+
   // ── get_lineage ───────────────────────────────────────────────────────────
 
   server.tool(
