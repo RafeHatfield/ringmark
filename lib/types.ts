@@ -138,6 +138,26 @@ export type AccountMember = {
   joined_at: string
 }
 
+export type ApiKey = {
+  id: string
+  account_id: string
+  key_hash: string
+  key_prefix: string
+  label: string | null
+  created_by: string
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export type ApiKeyInsert = {
+  account_id: string
+  key_hash: string
+  key_prefix: string
+  created_by: string
+  label?: string | null
+}
+
 export type AccountInvite = {
   id: string
   account_id: string
@@ -175,6 +195,12 @@ export interface Database {
         Row: AccountInvite
         Insert: AccountInviteInsert
         Update: Partial<AccountInviteInsert>
+        Relationships: []
+      }
+      api_keys: {
+        Row: ApiKey
+        Insert: ApiKeyInsert
+        Update: Partial<ApiKeyInsert>
         Relationships: []
       }
       wood_objects: {
