@@ -134,6 +134,7 @@ export type ObjectPhotoUpdate = Partial<ObjectPhotoInsert>
 export type AccountMember = {
   account_id: string
   user_id: string
+  role: 'owner' | 'member'
   joined_at: string
 }
 
