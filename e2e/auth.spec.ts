@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import path from 'path'
 import { TEST_EMAIL, TEST_PASSWORD } from './helpers/supabase-admin'
+import { createClient } from '@supabase/supabase-js'
 
 const AUTH_STATE = path.join(__dirname, '.auth/user.json')
 const OTHER_AUTH_STATE = path.join(__dirname, '.auth/other-user.json')
@@ -103,6 +104,16 @@ test.describe('auth — non-owner access', () => {
     ])
     firstUserObjectId = page.url().split('/objects/')[1]
     await ctx.close()
+  })
+
+  test.afterAll(async () => {
+    if (!firstUserObjectId) return
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    )
+    await admin.from('wood_objects').delete().eq('id', firstUserObjectId)
   })
 
   test('authenticated non-owner cannot access another user\'s object', async ({ browser }) => {

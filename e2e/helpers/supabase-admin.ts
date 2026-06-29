@@ -68,6 +68,26 @@ export async function ensureSecondTestUser(): Promise<string> {
   return data.user.id
 }
 
+export async function createTestApiKey(
+  userId: string,
+  accountId: string,
+  label = 'isolation test key',
+): Promise<{ rawKey: string; keyId: string }> {
+  const { createHash } = await import('crypto')
+  const rawKey  = `rmk_isokey${Date.now().toString(16)}${Math.random().toString(36).slice(2)}`
+  const keyHash = createHash('sha256').update(rawKey).digest('hex')
+  const client  = adminClient()
+  const { data, error } = await client.from('api_keys').insert({
+    account_id: accountId,
+    key_hash:   keyHash,
+    key_prefix: rawKey.slice(0, 8),
+    label,
+    created_by: userId,
+  }).select('id').single()
+  if (error || !data) throw new Error(`Failed to create test API key: ${error?.message}`)
+  return { rawKey, keyId: data.id }
+}
+
 export async function updateObjectAdmin(objectId: string, data: Record<string, unknown>): Promise<void> {
   const client = adminClient()
   await client.from('wood_objects').update(data).eq('id', objectId)
