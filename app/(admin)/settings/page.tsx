@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createInvite } from '@/actions/members'
 import { APP_URL } from '@/lib/constants'
+import { ApiKeyManager } from '@/components/api-key-manager'
 
 export default async function SettingsPage({
   searchParams,
@@ -41,6 +42,14 @@ export default async function SettingsPage({
     .is('claimed_at', null)
     .gt('expires_at', new Date().toISOString())
     .order('expires_at')
+
+  // Fetch API keys for this account (service role needed to include created_by join)
+  const { data: apiKeys } = await admin
+    .from('api_keys')
+    .select('id, key_prefix, label, created_at, last_used_at')
+    .eq('account_id', account.id)
+    .is('revoked_at', null)
+    .order('created_at', { ascending: true })
 
   const appUrl = APP_URL
   const newInviteUrl = newInviteToken ? `${appUrl}/invite/${newInviteToken}` : null
@@ -105,6 +114,16 @@ export default async function SettingsPage({
         <p className="text-xs text-bark mt-2">
           The person you invite will need to create a Ringmark account or sign in, then follow the link.
         </p>
+      </section>
+
+      {/* API Keys */}
+      <section className="mb-10">
+        <h2 className="text-xs text-bark tracking-wider mb-3">API Keys</h2>
+        <p className="text-xs text-bark mb-3">
+          Keys authenticate requests to the REST API and MCP server. Each key is tied to this account.
+          The raw key is shown once at creation — store it somewhere safe.
+        </p>
+        <ApiKeyManager keys={apiKeys ?? []} />
       </section>
     </main>
   )
