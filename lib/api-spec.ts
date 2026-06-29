@@ -187,11 +187,23 @@ function buildRegistry(): OpenAPIRegistry {
     path: '/api/v1/objects/{id}',
     tags: ['Objects'],
     summary: 'Delete an object',
-    description: 'Permanently deletes the object. Children are cascade-deleted by the database.',
+    description: 'Permanently deletes the object and removes all associated photo files from storage. ' +
+      'Blocked if the object is published (pass `?force=true` to override) or has children (delete/re-parent them first).',
     security,
-    request: { params: z.object({ id: idParam.schema }) },
+    request: {
+      params: z.object({ id: idParam.schema }),
+      query: z.object({
+        force: z.enum(['true']).optional().openapi({
+          description: 'Pass force=true to delete a published object.',
+        }),
+      }),
+    },
     responses: {
       204: { description: 'Deleted — no content' },
+      409: {
+        description: 'Object is published (pass ?force=true) or has children that must be removed first',
+        content: { 'application/json': { schema: ErrorSchema } },
+      },
       ...errorResponses,
     },
   })

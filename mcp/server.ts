@@ -268,6 +268,26 @@ export function createServer(
     }
   )
 
+  // ── delete_object ─────────────────────────────────────────────────────────
+
+  server.tool(
+    'delete_object',
+    'Permanently delete an object and all its photos. Cannot be undone.\n\n' +
+    'Guards:\n' +
+    '• Published objects: blocked unless force=true. Unpublish first or pass force=true.\n' +
+    '• Objects with children: always blocked — delete or re-parent children first.\n\n' +
+    'Photos are removed from storage as part of deletion.',
+    {
+      id: z.string().describe('Workshop ID (e.g. RH4-2) or UUID of the object to delete'),
+      force: z.boolean().default(false).describe('Set true to delete a published object. Has no effect on the children guard.'),
+    },
+    async ({ id, force }) => {
+      const qs = force ? '?force=true' : ''
+      await api('DELETE', `/objects/${encodeURIComponent(id)}${qs}`)
+      return { content: [{ type: 'text' as const, text: `Deleted ${id}.` }] }
+    }
+  )
+
   // ── save_story ────────────────────────────────────────────────────────────
 
   server.tool(

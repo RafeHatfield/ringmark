@@ -152,8 +152,45 @@ export async function DELETE(
     return Response.json({ error: 'Object not found' }, { status: 404 })
   }
 
-  // Delete the object (cascades to children via DB foreign key or deletes the record;
-  // follows the same pattern as deleteObject in actions/objects.ts)
+  const force = new URL(request.url).searchParams.get('force') === 'true'
+
+  if (obj.is_published && !force) {
+    return Response.json(
+      { error: 'Object is published. Unpublish first, or pass ?force=true to delete a live page.' },
+      { status: 409 }
+    )
+  }
+
+  const { data: children } = await db
+    .from('wood_objects')
+    .select('workshop_id')
+    .eq('parent_id', obj.id)
+    .eq('account_id', account.id)
+
+  if (children && children.length > 0) {
+    const ids = children.map(c => c.workshop_id).join(', ')
+    return Response.json(
+      { error: `Object has children: ${ids}. Delete or re-parent them first.` },
+      { status: 409 }
+    )
+  }
+
+  // Remove photo storage files (best-effort — DB records cascade automatically)
+  const { data: photos } = await db
+    .from('object_photos')
+    .select('storage_path')
+    .eq('object_id', obj.id)
+    .eq('account_id', account.id)
+
+  if (photos && photos.length > 0) {
+    const { error: storageError } = await db.storage
+      .from('object-photos')
+      .remove(photos.map(p => p.storage_path))
+    if (storageError) {
+      console.error('[delete object] storage remove failed:', storageError.message)
+    }
+  }
+
   const { error: deleteError } = await db
     .from('wood_objects')
     .delete()
