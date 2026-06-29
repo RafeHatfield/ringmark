@@ -158,6 +158,12 @@ export type ApiKeyInsert = {
   label?: string | null
 }
 
+export type ApiKeyUpdate = {
+  label?: string | null
+  last_used_at?: string | null
+  revoked_at?: string | null
+}
+
 export type AccountInvite = {
   id: string
   account_id: string
@@ -200,7 +206,7 @@ export interface Database {
       api_keys: {
         Row: ApiKey
         Insert: ApiKeyInsert
-        Update: Partial<ApiKeyInsert>
+        Update: ApiKeyUpdate
         Relationships: []
       }
       wood_objects: {

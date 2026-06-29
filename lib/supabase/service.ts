@@ -16,7 +16,7 @@ export function createServiceClient() {
   )
 }
 
-type ServiceClient = ReturnType<typeof createServiceClient>
+export type ServiceClient = ReturnType<typeof createServiceClient>
 
 /**
  * Resolves the single account for this Ringmark instance.

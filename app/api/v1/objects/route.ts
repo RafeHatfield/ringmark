@@ -1,5 +1,5 @@
-import { verifyApiKey } from '@/lib/api-auth'
-import { createServiceClient, getAccount } from '@/lib/supabase/service'
+import { authenticateApiRequest } from '@/lib/api-auth'
+import { createServiceClient } from '@/lib/supabase/service'
 import { CreateObjectSchema } from '@/lib/api-schemas'
 import { suggestRootId } from '@/lib/id-gen'
 import { generateSlug } from '@/lib/slug-gen'
@@ -10,11 +10,9 @@ const createSchema = CreateObjectSchema
 // ── GET /api/v1/objects ───────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
-  const authError = verifyApiKey(request)
-  if (authError) return authError
-
   const db = createServiceClient()
-  const account = await getAccount(db)
+  const { account, error: authErr } = await authenticateApiRequest(request, db)
+  if (authErr) return authErr
 
   const url = new URL(request.url)
   const q = url.searchParams.get('q') ?? undefined
@@ -63,11 +61,9 @@ export async function GET(request: Request) {
 // ── POST /api/v1/objects ──────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  const authError = verifyApiKey(request)
-  if (authError) return authError
-
   const db = createServiceClient()
-  const account = await getAccount(db)
+  const { account, error: authErr } = await authenticateApiRequest(request, db)
+  if (authErr) return authErr
 
   let body: unknown
   try {

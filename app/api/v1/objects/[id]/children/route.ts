@@ -1,5 +1,5 @@
-import { verifyApiKey } from '@/lib/api-auth'
-import { createServiceClient, getAccount } from '@/lib/supabase/service'
+import { authenticateApiRequest } from '@/lib/api-auth'
+import { createServiceClient } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
 import { CreateChildSchema } from '@/lib/api-schemas'
 import { suggestDescendantId } from '@/lib/id-gen'
@@ -14,12 +14,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = verifyApiKey(request)
-  if (authError) return authError
-
   const { id } = await params
   const db = createServiceClient()
-  const account = await getAccount(db)
+  const { account, error: authErr } = await authenticateApiRequest(request, db)
+  if (authErr) return authErr
 
   // Resolve parent
   const parent = await resolveObject(id, account.id, db)

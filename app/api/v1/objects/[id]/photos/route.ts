@@ -1,5 +1,5 @@
-import { verifyApiKey } from '@/lib/api-auth'
-import { createServiceClient, getAccount } from '@/lib/supabase/service'
+import { authenticateApiRequest } from '@/lib/api-auth'
+import { createServiceClient } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
 
 const BUCKET = 'object-photos'
@@ -11,12 +11,10 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = verifyApiKey(request)
-  if (authError) return authError
-
   const { id } = await params
   const db = createServiceClient()
-  const account = await getAccount(db)
+  const { account, error: authErr } = await authenticateApiRequest(request, db)
+  if (authErr) return authErr
 
   const object = await resolveObject(id, account.id, db)
   if (!object) {
@@ -65,12 +63,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = verifyApiKey(request)
-  if (authError) return authError
-
   const { id } = await params
   const db = createServiceClient()
-  const account = await getAccount(db)
+  const { account, error: authErr } = await authenticateApiRequest(request, db)
+  if (authErr) return authErr
 
   const object = await resolveObject(id, account.id, db)
   if (!object) {
