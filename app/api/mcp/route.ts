@@ -5,33 +5,34 @@
  * mode) using the existing in-process server factory. Compatible with
  * claude.ai Remote MCP and any standard MCP client.
  *
- * Authentication: Authorization: Bearer <MCP_SECRET>
+ * Authentication: Authorization: Bearer <account API key>
+ *   Generate a key at Settings → API Keys. The same key authenticates both
+ *   this endpoint and the underlying REST API calls it makes.
+ *
+ * Migration from MCP_SECRET:
+ *   The previous MCP_SECRET env var is no longer used. Generate a new API key
+ *   from Settings → API Keys and update your claude.ai integration to use it.
+ *   MCP_SECRET can be removed from your environment.
  *
  * To add in claude.ai → Settings → Integrations → Add MCP server:
  *   URL:  https://ringmark.org/api/mcp
- *   Auth: Bearer <value of MCP_SECRET env var>
+ *   Auth: Bearer <your account API key from Settings → API Keys>
  *
- * Environment variables required (set in Vercel dashboard):
- *   MCP_SECRET          — shared secret for this endpoint (generate a random hex string)
- *   RINGMARK_API_KEY    — already set
- *   RINGMARK_API_URL    — already set
+ * For local Claude Desktop (mcp/index.ts stdio entry point):
+ *   Update RINGMARK_API_KEY in .env.local to your account API key.
  */
 
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createServer } from '@/mcp/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import { authenticateApiRequest } from '@/lib/api-auth'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const SERVER_INFO = { name: 'ringmark', version: '0.2.0' } as const
-
-function verifySecret(request: Request): boolean {
-  const secret = process.env.MCP_SECRET
-  if (!secret) return false
-  return request.headers.get('authorization') === `Bearer ${secret}`
-}
+const SERVER_INFO = { name: 'ringmark', version: '0.3.0' } as const
 
 function jsonRpcOk(id: unknown, result: unknown): Response {
   return Response.json({ jsonrpc: '2.0', id, result })
@@ -44,8 +45,7 @@ function jsonRpcErr(id: unknown, code: number, message: string, status = 200): R
   )
 }
 
-async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
-  const apiKey = process.env.RINGMARK_API_KEY ?? ''
+async function withClient<T>(apiKey: string, fn: (client: Client) => Promise<T>): Promise<T> {
   const apiBase =
     (process.env.RINGMARK_API_URL ?? 'https://ringmark.org').replace(/\/$/, '') + '/api/v1'
 
@@ -65,7 +65,20 @@ async function withClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
 // ── POST — all MCP messages ───────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  if (!verifySecret(request)) {
+  // Validate the Bearer token against api_keys (dual-mode: DB hash first,
+  // RINGMARK_API_KEY env var fallback while that transition is still active)
+  const authHeader = request.headers.get('authorization') ?? ''
+  if (!authHeader.startsWith('Bearer ')) {
+    return jsonRpcErr(null, -32001, 'Unauthorized', 401)
+  }
+  const apiKey = authHeader.slice('Bearer '.length)
+  if (!apiKey) {
+    return jsonRpcErr(null, -32001, 'Unauthorized', 401)
+  }
+
+  const db = createServiceClient()
+  const { error: authErr } = await authenticateApiRequest(request, db)
+  if (authErr) {
     return jsonRpcErr(null, -32001, 'Unauthorized', 401)
   }
 
@@ -97,14 +110,14 @@ export async function POST(request: Request) {
 
       // ── Tool discovery ──────────────────────────────────────────────────────
       case 'tools/list': {
-        const result = await withClient(c => c.listTools())
+        const result = await withClient(apiKey, c => c.listTools())
         return jsonRpcOk(id, result)
       }
 
       // ── Tool execution ──────────────────────────────────────────────────────
       case 'tools/call': {
         const p = params as { name: string; arguments?: Record<string, unknown> }
-        const result = await withClient(c =>
+        const result = await withClient(apiKey, c =>
           c.callTool({ name: p.name, arguments: p.arguments ?? {} })
         )
         return jsonRpcOk(id, result)
@@ -126,6 +139,7 @@ export async function GET() {
     service: 'Ringmark MCP',
     version: SERVER_INFO.version,
     protocol: LATEST_PROTOCOL_VERSION,
-    usage: 'POST with Authorization: Bearer <MCP_SECRET> and a JSON-RPC 2.0 body',
+    usage: 'POST with Authorization: Bearer <account API key> and a JSON-RPC 2.0 body',
+    keysUrl: '/settings',
   })
 }
