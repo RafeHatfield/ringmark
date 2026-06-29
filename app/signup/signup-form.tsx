@@ -1,46 +1,59 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-export default function AuthForm() {
+export default function SignupForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const [oauthError, setOauthError] = useState('')
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const next = searchParams.get('next') ?? '/workshop'
-  const oauthError = searchParams.get('error')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
-    setError('')
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data } = await supabase.auth.signUp({ email, password })
 
-    if (authError) {
-      setError(authError.message)
-      setLoading(false)
-    } else {
-      router.replace(next)
+    // If immediately signed in (email confirmation disabled in Supabase), go straight through
+    if (data.session) {
+      router.replace('/workshop')
       router.refresh()
+      return
     }
+
+    // All other outcomes — email already exists, confirmation email sent, etc. —
+    // show the same generic message to prevent email enumeration.
+    setSubmitted(true)
+    setLoading(false)
   }
 
   async function handleGoogleSignIn() {
     const supabase = createClient()
-    const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
-    if (oauthErr) setError(oauthErr.message)
+    if (error) setOauthError(error.message)
+  }
+
+  if (submitted) {
+    return (
+      <div className="text-center space-y-3 py-4">
+        <p className="text-sm font-medium text-ink">Check your inbox.</p>
+        <p className="text-sm text-bark">
+          If this is a new account, you&rsquo;ll receive a confirmation link shortly.
+        </p>
+        <Link href="/login" className="text-sm text-cedar hover:underline block mt-4">
+          Back to sign in
+        </Link>
+      </div>
+    )
   }
 
   return (
@@ -50,7 +63,7 @@ export default function AuthForm() {
         className="w-full flex items-center justify-center gap-2 border border-hairline rounded-md px-4 py-2.5 text-sm font-medium hover:bg-sand transition-colors"
       >
         <GoogleIcon />
-        Sign in with Google
+        Sign up with Google
       </button>
 
       <div className="relative">
@@ -89,25 +102,27 @@ export default function AuthForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            autoComplete="current-password"
+            minLength={8}
+            autoComplete="new-password"
             className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
           />
         </div>
-        {(error || oauthError) && (
-          <p className="text-sm text-destructive">{error || 'Sign-in failed — please try again.'}</p>
+        {oauthError && (
+          <p className="text-sm text-destructive">{oauthError}</p>
         )}
         <button
           type="submit"
           disabled={loading}
           className="w-full bg-cedar text-paper rounded-md px-4 py-2.5 text-sm font-medium hover:bg-heartwood disabled:opacity-50 transition-colors"
         >
-          {loading ? 'Signing in…' : 'Sign in'}
+          {loading ? 'Creating account…' : 'Create account'}
         </button>
       </form>
+
       <p className="text-xs text-center text-bark">
-        Don&rsquo;t have an account?{' '}
-        <Link href="/signup" className="text-cedar hover:underline">
-          Create one
+        Already have an account?{' '}
+        <Link href="/login" className="text-cedar hover:underline">
+          Sign in
         </Link>
       </p>
     </div>

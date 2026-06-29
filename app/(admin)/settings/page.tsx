@@ -103,7 +103,7 @@ export default async function SettingsPage({
           </button>
         </form>
         <p className="text-xs text-bark mt-2">
-          The person you invite will need to create a Ringmark account or sign in with Google, then follow the link.
+          The person you invite will need to create a Ringmark account or sign in, then follow the link.
         </p>
       </section>
     </main>
