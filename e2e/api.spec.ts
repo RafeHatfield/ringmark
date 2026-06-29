@@ -104,11 +104,19 @@ test.beforeAll(async ({ request }) => {
 
 test.afterAll(async ({ request }) => {
   const h = apiHeaders()
-  for (const id of createdIds) {
-    try {
-      await request.delete(`/api/v1/objects/${id}`, { headers: h })
-    } catch {
-      // Ignore cleanup failures — don't mask test results
+  // Reverse order puts children before parents (children are always pushed after parents).
+  // Three passes handle the re-parenting test which can create depth-3 trees: one pass
+  // per level of nesting. force=true bypasses the published guard on publishedObjectId.
+  const pending = [...createdIds].reverse()
+  for (let pass = 0; pass < 3 && pending.length > 0; pass++) {
+    for (let i = pending.length - 1; i >= 0; i--) {
+      try {
+        const res = await request.delete(`/api/v1/objects/${pending[i]}?force=true`, { headers: h })
+        if (res.status() === 204 || res.status() === 404) pending.splice(i, 1)
+        // 409 = still has children; leave for next pass
+      } catch {
+        pending.splice(i, 1) // network error — nothing more to try
+      }
     }
   }
 })
@@ -575,6 +583,55 @@ test.describe('DELETE /api/v1/objects/:id', () => {
       headers: apiHeaders(),
     })
     expect(r.status()).toBe(404)
+  })
+
+  test('DELETE published object without ?force=true → 409', async ({ request }) => {
+    // publishedObjectId is published (created and published in beforeAll)
+    const r = await request.delete(`/api/v1/objects/${publishedObjectId}`, { headers: apiHeaders() })
+    expect(r.status()).toBe(409)
+    const body = await r.json()
+    expect(body).toHaveProperty('error')
+    expect(body.error).toMatch(/published/i)
+  })
+
+  test('DELETE published object with ?force=true → 204', async ({ request }) => {
+    // Create a throwaway published object so we don't consume publishedObjectId
+    const h = apiHeaders()
+    const r = await request.post('/api/v1/objects', {
+      headers: h,
+      data: { object_type: 'offcut', workshop_id: `${RUN_TAG}FRCPUB` },
+    })
+    expect(r.status()).toBe(201)
+    const obj = await r.json()
+    await request.patch(`/api/v1/objects/${obj.id}`, { headers: h, data: { is_published: true } })
+
+    const del = await request.delete(`/api/v1/objects/${obj.id}?force=true`, { headers: h })
+    expect(del.status()).toBe(204)
+  })
+
+  test('DELETE object with children → 409 with error naming the children', async ({ request }) => {
+    const h = apiHeaders()
+    const rp = await request.post('/api/v1/objects', {
+      headers: h,
+      data: { object_type: 'log', workshop_id: `${RUN_TAG}DELPAR` },
+    })
+    expect(rp.status()).toBe(201)
+    const parent = await rp.json()
+    createdIds.push(parent.id)
+
+    const rc = await request.post(`/api/v1/objects/${parent.id}/children`, {
+      headers: h,
+      data: { object_type: 'chunk' },
+    })
+    expect(rc.status()).toBe(201)
+    const child = await rc.json()
+    createdIds.push(child.id)
+
+    const del = await request.delete(`/api/v1/objects/${parent.id}`, { headers: h })
+    expect(del.status()).toBe(409)
+    const body = await del.json()
+    expect(body).toHaveProperty('error')
+    expect(body.error).toMatch(/children/i)
   })
 })
 
