@@ -73,15 +73,41 @@ export async function updateObjectAdmin(objectId: string, data: Record<string, u
   await client.from('wood_objects').update(data).eq('id', objectId)
 }
 
+export async function getAccountIdForUser(userId: string): Promise<string> {
+  const client = adminClient()
+  const { data } = await client
+    .from('account_members')
+    .select('account_id')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle()
+  if (!data) throw new Error(`No account found for user ${userId}`)
+  return data.account_id
+}
+
+export async function getRoleForUser(userId: string): Promise<string | null> {
+  const client = adminClient()
+  const { data } = await client
+    .from('account_members')
+    .select('role')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle()
+  return data?.role ?? null
+}
+
 export async function deleteTestData(userId: string): Promise<void> {
   const client = adminClient()
 
-  // Find the test account
-  const { data: account } = await client
-    .from('accounts')
-    .select('id')
-    .eq('owner_user_id', userId)
-    .single()
+  // Find the test account via account_members (not owner_user_id — future-proof for invited members)
+  const { data: membership } = await client
+    .from('account_members')
+    .select('account_id')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle()
+
+  const account = membership ? { id: membership.account_id } : null
 
   if (!account) return
 
