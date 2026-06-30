@@ -15,9 +15,12 @@ export function RootCard({ summary }: { summary: RootSummary }) {
 
   const subtitle = root.title ?? root.species
 
+  // Multi-node trees open the tree view; solo roots open the edit page directly
+  const href = descendantCount > 0 ? `/objects/${root.id}/tree` : `/objects/${root.id}`
+
   return (
     <Link
-      href={`/objects/${root.id}`}
+      href={href}
       className="flex items-center justify-between py-3 hover:opacity-70 transition-opacity gap-3"
     >
       <div>

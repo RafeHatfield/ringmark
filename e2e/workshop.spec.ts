@@ -178,6 +178,48 @@ test('tree page node links to detail page', async ({ page }) => {
   await expect(page).toHaveURL(`/objects/${childId}`)
 })
 
+// ── Root card navigation ──────────────────────────────────────────────────────
+
+test('root card with children links to tree page', async ({ page }) => {
+  await page.goto('/workshop')
+  // The source has a child and grandchild (descendantCount > 0) — must link to /tree
+  const rootLink = page.getByRole('link').filter({ hasText: sourceWorkshopId }).first()
+  const href = await rootLink.getAttribute('href')
+  expect(href).toContain('/tree')
+})
+
+test('clicking root card with children navigates to tree page', async ({ page }) => {
+  await page.goto('/workshop')
+  await page.getByRole('link').filter({ hasText: sourceWorkshopId }).first().click()
+  await expect(page).toHaveURL(new RegExp(`/objects/${sourceId}/tree`))
+})
+
+test('solo root card (no children) links directly to edit page', async ({ page }) => {
+  // Create a fresh solo root
+  await page.goto('/objects/new?type=source')
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
+  const soloId = page.url().split('/objects/')[1]
+  const soloWorkshopId = (await page.locator('h1.font-mono').textContent())?.trim() ?? ''
+
+  await page.goto('/workshop')
+  const soloLink = page.getByRole('link').filter({ hasText: soloWorkshopId }).first()
+  const href = await soloLink.getAttribute('href')
+  expect(href).toBe(`/objects/${soloId}`)
+  expect(href).not.toContain('/tree')
+
+  // Clean up
+  const { createClient } = await import('@supabase/supabase-js')
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+  await admin.from('wood_objects').delete().eq('id', soloId)
+})
+
 test('search returns non-root nodes', async ({ page }) => {
   await page.goto(`/workshop?q=${encodeURIComponent(childWorkshopId)}`)
   await expect(page.getByText(childWorkshopId, { exact: true })).toBeVisible()
