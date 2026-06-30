@@ -3,9 +3,11 @@
 import { useRef, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { saveProfile } from '@/actions/profile'
+import { slugifyHandle, isValidHandle } from '@/lib/handle'
 
 interface Props {
   accountId: string
+  initialHandle: string
   initialDisplayName: string
   initialWorkshopName: string
   initialBio: string
@@ -16,6 +18,7 @@ interface Props {
 
 export function ProfileForm({
   accountId,
+  initialHandle,
   initialDisplayName,
   initialWorkshopName,
   initialBio,
@@ -26,10 +29,28 @@ export function ProfileForm({
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(initialAvatarUrl)
   const [avatarPath, setAvatarPath] = useState<string | null>(initialAvatarPath)
+  const [handle, setHandle] = useState(initialHandle)
+  const [handleTouched, setHandleTouched] = useState(!!initialHandle)
+  const [handleError, setHandleError] = useState('')
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
   const [isPending, startTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function onWorkshopNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!handleTouched) setHandle(slugifyHandle(e.target.value))
+  }
+
+  function onHandleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setHandleTouched(true)
+    const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')
+    setHandle(val)
+    if (val && !isValidHandle(val)) {
+      setHandleError('Lowercase letters, numbers, and hyphens only. Min 2 characters, must start and end with a letter or number.')
+    } else {
+      setHandleError('')
+    }
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -137,11 +158,42 @@ export function ProfileForm({
           name="workshop_name"
           type="text"
           defaultValue={initialWorkshopName}
+          onChange={onWorkshopNameChange}
           placeholder="e.g. Cedarline Woodworks"
           className="w-full border border-hairline rounded-md px-3 py-2 text-sm bg-paper focus:outline-none focus:ring-1 focus:ring-cedar"
         />
         <p className="text-xs text-bark">
           Shown on public piece pages. If left blank, your name is used instead.
+        </p>
+      </div>
+
+      {/* Workshop URL handle */}
+      <div className="space-y-1.5">
+        <label htmlFor="handle" className="block text-sm font-medium">
+          Workshop URL
+        </label>
+        <div className="flex items-center border border-hairline rounded-md overflow-hidden focus-within:ring-1 focus-within:ring-cedar">
+          <span className="px-3 py-2 text-sm text-bark bg-sand border-r border-hairline select-none whitespace-nowrap">
+            ringmark.org/
+          </span>
+          <input
+            id="handle"
+            name="handle"
+            type="text"
+            value={handle}
+            onChange={onHandleChange}
+            placeholder="moon-and-moss"
+            className="flex-1 px-3 py-2 text-sm bg-paper focus:outline-none min-w-0"
+          />
+        </div>
+        {handleError && <p className="text-xs text-destructive">{handleError}</p>}
+        {initialHandle && handle !== initialHandle && !handleError && (
+          <p className="text-xs text-amber-700">Changing this will break existing links to your maker page.</p>
+        )}
+        <p className="text-xs text-bark">
+          {handle && !handleError
+            ? <>Your maker page: <strong>ringmark.org/{handle}/maker</strong></>
+            : 'Your public maker page URL. Suggested from your workshop name.'}
         </p>
       </div>
 

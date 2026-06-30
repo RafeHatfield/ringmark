@@ -33,6 +33,7 @@ export type Account = {
   owner_user_id: string
   name: string
   default_prefix: string
+  handle: string | null
   display_name: string | null
   workshop_name: string | null
   bio: string | null

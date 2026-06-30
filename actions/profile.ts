@@ -18,6 +18,11 @@ export async function saveProfile(formData: FormData): Promise<{ error: string }
   const bio = (formData.get('bio') as string)?.trim() || null
   const website_url = (formData.get('website_url') as string)?.trim() || null
   const avatar_storage_path = formData.get('avatar_storage_path') as string | null
+  const rawHandle = (formData.get('handle') as string)?.trim().toLowerCase() || null
+  // Only save handle if it passes format validation; silently ignore otherwise
+  const handle = rawHandle && /^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(rawHandle) && rawHandle.length >= 2
+    ? rawHandle
+    : null
 
   await supabase
     .from('accounts')
@@ -27,10 +32,12 @@ export async function saveProfile(formData: FormData): Promise<{ error: string }
       bio,
       website_url,
       ...(avatar_storage_path !== null && { avatar_storage_path: avatar_storage_path || null }),
+      ...(handle !== null && { handle }),
     })
     .eq('id', account.id)
 
   revalidatePath('/profile')
   revalidatePath('/workshop')
   revalidatePath('/maker')
+  if (handle) revalidatePath(`/${handle}/maker`)
 }

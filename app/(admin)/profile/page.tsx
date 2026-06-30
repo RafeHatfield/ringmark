@@ -27,6 +27,7 @@ export default async function ProfilePage() {
 
       <ProfileForm
         accountId={account.id}
+        initialHandle={account.handle ?? ''}
         initialDisplayName={account.display_name ?? ''}
         initialWorkshopName={account.workshop_name ?? ''}
         initialBio={account.bio ?? ''}
