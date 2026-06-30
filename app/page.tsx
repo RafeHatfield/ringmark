@@ -109,7 +109,7 @@ export default async function LandingPage() {
                   Log in to your workshop
                 </Link>
                 <Link
-                  href="/p/7M7Msxsg"
+                  href="/p/Z4ApFckA"
                   className="text-[14px] text-cedar hover:text-heartwood hover:underline transition-colors"
                 >
                   See an example piece →
