@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
 import {
   createPhotoRecord,
@@ -158,11 +159,12 @@ export function PhotoSection({
               {/* Photo */}
               <div className="aspect-square bg-secondary relative">
                 {photo.signedUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={photo.signedUrl}
                     alt={photo.caption ?? ''}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="(max-width: 672px) 50vw, 336px"
+                    className="object-cover"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
