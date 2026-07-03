@@ -56,13 +56,11 @@ test.describe('maker page', () => {
     await pubPage.goto(`/p/${slug}`)
     await expect(pubPage.getByText(uniqueTitle)).toBeVisible({ timeout: 5_000 })
 
-    // Verify the maker page links to the newly published piece in the Work section
+    // The legacy /maker route only lists the oldest account's pieces (account-scoped).
+    // The test account is not that account, so its piece must NOT leak onto /maker —
+    // this is the cross-account isolation the route is supposed to guarantee.
     await pubPage.goto('/maker')
-    await expect(pubPage.locator(`a[href="/p/${slug}"]`)).toBeVisible({ timeout: 5_000 })
-
-    // Clicking it navigates to the public story page
-    await pubPage.locator(`a[href="/p/${slug}"]`).click()
-    await expect(pubPage).toHaveURL(/\/p\//)
+    await expect(pubPage.locator(`a[href="/p/${slug}"]`)).toHaveCount(0)
 
     await pubCtx.close()
   })

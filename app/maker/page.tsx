@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import { permanentRedirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { APP_URL } from '@/lib/constants'
 
@@ -8,10 +9,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const admin = createAdminClient()
   const { data: account } = await admin
     .from('accounts')
-    .select('display_name, workshop_name, name, bio')
+    .select('display_name, workshop_name, name, bio, handle')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
+
+  if (account?.handle) {
+    permanentRedirect(`/${account.handle}/maker`)
+  }
 
   const makerName = account?.workshop_name || account?.display_name || account?.name || 'The Maker'
   const description = account?.bio
@@ -44,17 +49,10 @@ export default async function MakerPage() {
 
   const { data: account } = await admin
     .from('accounts')
-    .select('display_name, workshop_name, name, bio, avatar_storage_path, website_url')
+    .select('id, display_name, workshop_name, name, bio, avatar_storage_path, website_url, handle')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
-
-  // Fetch published pieces — public fields only, never private_notes / location_text / workshop_id
-  const { data: pieces } = await admin
-    .from('wood_objects')
-    .select('public_slug, public_title, title, species, updated_at')
-    .eq('is_published', true)
-    .order('updated_at', { ascending: false })
 
   if (!account) {
     return (
@@ -63,6 +61,18 @@ export default async function MakerPage() {
       </div>
     )
   }
+
+  if (account.handle) {
+    permanentRedirect(`/${account.handle}/maker`)
+  }
+
+  // Fetch published pieces — public fields only, never private_notes / location_text / workshop_id
+  const { data: pieces } = await admin
+    .from('wood_objects')
+    .select('public_slug, public_title, title, species, updated_at')
+    .eq('account_id', account.id)
+    .eq('is_published', true)
+    .order('updated_at', { ascending: false })
 
   const makerName = account.workshop_name || account.display_name || account.name
 
