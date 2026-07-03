@@ -42,13 +42,15 @@ export async function createObject(
   const public_slug = await generateSlug(supabase)
 
   let root_id: string | null = null
+  let parentSpecies: string | null = null
   if (data.parent_id) {
     const { data: parent } = await supabase
       .from('wood_objects')
-      .select('root_id')
+      .select('root_id, species')
       .eq('id', data.parent_id)
       .single()
     root_id = parent?.root_id ?? null
+    parentSpecies = parent?.species ?? null
   }
 
   const { data: created, error } = await supabase
@@ -62,8 +64,10 @@ export async function createObject(
       parent_id: data.parent_id ?? null,
       root_id,
       title: data.title?.trim() || null,
-      species: data.species?.trim() || null,
-      species_confidence: data.species_confidence || null,
+      species: data.species?.trim() || parentSpecies,
+      species_confidence: !data.species?.trim() && data.parent_id
+        ? null
+        : data.species_confidence || null,
       status: data.status || null,
       private_notes: data.private_notes?.trim() || null,
       public_story: data.public_story?.trim() || null,
