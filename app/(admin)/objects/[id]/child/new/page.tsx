@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createClient } from '@/lib/supabase/server'
 import { suggestDescendantId } from '@/lib/id-gen'
-import ChildObjectForm from './child-object-form'
+import ObjectForm from '@/components/object-form'
 
 export default async function AddChildPage({
   params,
@@ -36,9 +36,8 @@ export default async function AddChildPage({
   return (
     <main className="max-w-2xl mx-auto px-4 pt-6 pb-16">
       <h1 className="text-lg font-semibold mb-6">Add Child</h1>
-      <ChildObjectForm
-        parentId={parent.id}
-        parentWorkshopId={parent.workshop_id}
+      <ObjectForm
+        parent={{ id: parent.id, workshopId: parent.workshop_id }}
         suggestedId={suggestedId}
       />
     </main>

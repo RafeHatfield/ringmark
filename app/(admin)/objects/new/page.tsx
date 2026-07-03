@@ -2,7 +2,7 @@ import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createClient } from '@/lib/supabase/server'
 import { suggestRootId } from '@/lib/id-gen'
 import type { ObjectType } from '@/lib/types'
-import NewObjectForm from './new-object-form'
+import ObjectForm from '@/components/object-form'
 
 export default async function NewObjectPage({
   searchParams,
@@ -23,7 +23,7 @@ export default async function NewObjectPage({
   return (
     <main className="max-w-2xl mx-auto px-4 pt-6 pb-16">
       <h1 className="text-lg font-semibold mb-6">Add Object</h1>
-      <NewObjectForm suggestedId={suggestedId} defaultType={defaultType} />
+      <ObjectForm suggestedId={suggestedId} defaultType={defaultType} />
     </main>
   )
 }
