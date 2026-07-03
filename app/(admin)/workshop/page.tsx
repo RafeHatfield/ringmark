@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createClient } from '@/lib/supabase/server'
-import { OBJECT_TYPES } from '@/lib/constants'
+import { typeLabel } from '@/lib/constants'
 import { SearchInput } from '@/components/search-input'
 import { rollupRoots } from '@/lib/tree-rollup'
 import { RootCard } from '@/components/root-card'
@@ -138,7 +138,7 @@ export default async function WorkshopPage({
             </h2>
             <ul className="divide-y divide-hairline">
               {searchObjects.map((obj) => {
-                const typeLabel = OBJECT_TYPES.find((t) => t.value === obj.object_type)?.label ?? obj.object_type
+                const label = typeLabel(obj.object_type)
                 return (
                   <li key={obj.id}>
                     <Link
@@ -157,7 +157,7 @@ export default async function WorkshopPage({
                             {obj.status.replace('_', ' ')}
                           </span>
                         )}
-                        <span className="text-xs text-bark">{typeLabel}</span>
+                        <span className="text-xs text-bark">{label}</span>
                       </div>
                     </Link>
                   </li>

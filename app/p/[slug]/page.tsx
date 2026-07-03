@@ -4,11 +4,9 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { APP_URL, SIGNED_URL_EXPIRY, OBJECT_TYPES } from '@/lib/constants'
+import { APP_URL, SIGNED_URL_EXPIRY, typeLabel } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
 import { StagePhoto } from './stage-photo'
-
-const TYPE_LABELS = Object.fromEntries(OBJECT_TYPES.map(t => [t.value, t.label]))
 
 // Shared leaf-object lookup for generateMetadata + the page body — cache()
 // dedupes the query to one call per request regardless of how many times
@@ -186,7 +184,7 @@ export default async function PublicStoryPage({
       .filter(p => p.url)
     return {
       ...step,
-      step_label: step.title || TYPE_LABELS[step.object_type] || step.object_type,
+      step_label: step.title || typeLabel(step.object_type),
       photos,
     }
   })

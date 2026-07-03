@@ -7,6 +7,7 @@ import {
   APP_URL,
   SIGNED_URL_EXPIRY,
   MAX_VISIBLE_PHOTOS,
+  typeLabel,
 } from '../../lib/constants.ts'
 import type { ObjectStatus } from '../../lib/types.ts'
 
@@ -28,6 +29,17 @@ describe('OBJECT_TYPES', () => {
       assert.ok(t.value, `OBJECT_TYPES entry has empty value: ${JSON.stringify(t)}`)
       assert.ok(t.label, `OBJECT_TYPES entry has empty label: ${JSON.stringify(t)}`)
     }
+  })
+})
+
+describe('typeLabel', () => {
+  it('returns the label for a known object type', () => {
+    assert.equal(typeLabel('source'), 'Source')
+    assert.equal(typeLabel('finished_bowl'), 'Finished Bowl')
+  })
+
+  it('falls back to the raw value for an unknown type', () => {
+    assert.equal(typeLabel('not_a_real_type'), 'not_a_real_type')
   })
 })
 

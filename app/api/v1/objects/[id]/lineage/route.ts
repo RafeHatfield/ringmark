@@ -1,10 +1,9 @@
 import { authenticateApiRequest } from '@/lib/api-auth'
 import { createServiceClient } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
-import { OBJECT_TYPES } from '@/lib/constants'
+import { typeLabel } from '@/lib/constants'
 
 const SIGNED_URL_EXPIRY = 3600
-const TYPE_LABELS = Object.fromEntries(OBJECT_TYPES.map(t => [t.value, t.label]))
 
 // ── GET /api/v1/objects/:id/lineage ──────────────────────────────────────────
 //
@@ -83,7 +82,7 @@ export async function GET(
       id: step.id,
       workshop_id: step.workshop_id,
       object_type: step.object_type,
-      step_label: step.title || TYPE_LABELS[step.object_type] || step.object_type,
+      step_label: step.title || typeLabel(step.object_type),
       public_story: step.public_story,
       status: step.status,
       photo_count: meta?.count ?? 0,

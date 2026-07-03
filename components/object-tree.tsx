@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import type { TreeNode } from '@/lib/build-tree'
-import { OBJECT_TYPES } from '@/lib/constants'
+import { typeLabel } from '@/lib/constants'
 
 function TreeRow({ node, depth }: { node: TreeNode; depth: number }) {
-  const typeLabel = OBJECT_TYPES.find((t) => t.value === node.object_type)?.label ?? node.object_type
+  const label = typeLabel(node.object_type)
   return (
     <>
       <li>
@@ -15,7 +15,7 @@ function TreeRow({ node, depth }: { node: TreeNode; depth: number }) {
           <div className="flex items-center gap-2 min-w-0">
             {depth > 0 && <span className="text-bark shrink-0">└</span>}
             <span className="font-mono text-sm font-medium">{node.workshop_id}</span>
-            <span className="text-xs text-bark">{typeLabel}</span>
+            <span className="text-xs text-bark">{label}</span>
           </div>
           {node.status && (
             <span className="text-xs text-bark capitalize shrink-0">

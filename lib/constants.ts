@@ -14,6 +14,12 @@ export const OBJECT_TYPES: { value: ObjectType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ]
 
+const OBJECT_TYPE_LABELS = new Map(OBJECT_TYPES.map((t) => [t.value, t.label]))
+
+export function typeLabel(value: string): string {
+  return OBJECT_TYPE_LABELS.get(value as ObjectType) ?? value
+}
+
 export const OBJECT_STATUSES: { value: ObjectStatus; label: string }[] = [
   { value: 'unknown', label: 'Unknown' },
   { value: 'acquired', label: 'Acquired' },

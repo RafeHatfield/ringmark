@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createClient } from '@/lib/supabase/server'
-import { OBJECT_TYPES } from '@/lib/constants'
+import { typeLabel } from '@/lib/constants'
 import { StatusChanger } from '@/components/status-changer'
 import { PhotoSection, type PhotoData } from '@/components/photo-section'
 import { DeleteObjectButton } from '@/components/delete-object-button'
@@ -60,8 +60,7 @@ export default async function ObjectDetailPage({
     }))
   }
 
-  const typeLabel =
-    OBJECT_TYPES.find((t) => t.value === object.object_type)?.label ?? object.object_type
+  const objectTypeLabel = typeLabel(object.object_type)
 
   const hasDetails =
     object.species ||
@@ -93,7 +92,7 @@ export default async function ObjectDetailPage({
         )}
         <div className="flex items-center gap-2 flex-wrap mt-3">
           <span className="text-xs px-2 py-0.5 rounded-full border text-bark">
-            {typeLabel}
+            {objectTypeLabel}
           </span>
           <StatusChanger objectId={id} status={object.status} />
           {object.is_published && (
@@ -143,7 +142,7 @@ export default async function ObjectDetailPage({
                   {parent.workshop_id}
                 </Link>
                 <span className="text-xs text-bark ml-2">
-                  {OBJECT_TYPES.find((t) => t.value === parent.object_type)?.label}
+                  {typeLabel(parent.object_type)}
                 </span>
               </div>
             )}
@@ -162,7 +161,7 @@ export default async function ObjectDetailPage({
                         {child.workshop_id}
                       </Link>
                       <span className="text-xs text-bark ml-2">
-                        {OBJECT_TYPES.find((t) => t.value === child.object_type)?.label}
+                        {typeLabel(child.object_type)}
                       </span>
                     </li>
                   ))}
