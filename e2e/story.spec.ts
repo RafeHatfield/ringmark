@@ -101,7 +101,9 @@ test('public page shows story title and text', async ({ browser }) => {
   const page = await ctx.newPage()
 
   await page.goto(`/p/${publicSlug}`)
-  await expect(page.getByText(STORY_TITLE)).toBeVisible()
+  // Use the heading role, not getByText — the same title text also renders in
+  // the (non-visible) <title> element, which getByText would also match.
+  await expect(page.getByRole('heading', { name: STORY_TITLE })).toBeVisible()
   await expect(page.getByText(STORY_TEXT)).toBeVisible()
 
   await ctx.close()

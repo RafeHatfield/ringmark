@@ -54,7 +54,9 @@ test.describe('maker page', () => {
 
     // Verify the piece is publicly accessible at its own URL (primary publish test)
     await pubPage.goto(`/p/${slug}`)
-    await expect(pubPage.getByText(uniqueTitle)).toBeVisible({ timeout: 5_000 })
+    // Use the heading role, not getByText — the same title text also renders in
+    // the (non-visible) <title> element, which getByText would also match.
+    await expect(pubPage.getByRole('heading', { name: uniqueTitle })).toBeVisible({ timeout: 5_000 })
 
     // The legacy /maker route only lists the oldest account's pieces (account-scoped).
     // The test account is not that account, so its piece must NOT leak onto /maker —
