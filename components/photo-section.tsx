@@ -42,6 +42,7 @@ export function PhotoSection({
   const [uploadCount, setUploadCount] = useState({ done: 0, total: 0 })
   const [editingCaption, setEditingCaption] = useState<string | null>(null)
   const [captionValue, setCaptionValue] = useState('')
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   async function handleFiles(files: FileList) {
@@ -90,9 +91,9 @@ export function PhotoSection({
   }
 
   function handleDelete(photoId: string) {
-    if (!confirm('Delete this photo? This cannot be undone.')) return
     startTransition(async () => {
       const result = await deletePhoto(photoId)
+      setConfirmingDeleteId(null)
       if (result.error) setUploadError(result.error)
       else router.refresh()
     })
@@ -244,14 +245,33 @@ export function PhotoSection({
                 >
                   {photo.is_public ? '👁' : '🔒'}
                 </button>
-                <button
-                  onClick={() => handleDelete(photo.id)}
-                  disabled={isPending}
-                  className="text-xs px-1.5 py-0.5 border border-destructive text-destructive rounded disabled:opacity-50 hover:bg-destructive/10 ml-auto"
-                  title="Delete photo"
-                >
-                  ✕
-                </button>
+                {confirmingDeleteId === photo.id ? (
+                  <span className="flex items-center gap-1 ml-auto">
+                    <button
+                      onClick={() => handleDelete(photo.id)}
+                      disabled={isPending}
+                      className="text-xs px-1.5 py-0.5 bg-destructive text-destructive-foreground rounded disabled:opacity-50"
+                    >
+                      {isPending ? 'Deleting…' : 'Yes, delete'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmingDeleteId(null)}
+                      disabled={isPending}
+                      className="text-xs px-1.5 py-0.5 border rounded"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setConfirmingDeleteId(photo.id)}
+                    disabled={isPending}
+                    className="text-xs px-1.5 py-0.5 border border-destructive text-destructive rounded disabled:opacity-50 hover:bg-destructive/10 ml-auto"
+                    title="Delete photo"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             </div>
           ))}
