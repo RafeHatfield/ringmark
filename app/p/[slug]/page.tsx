@@ -84,7 +84,7 @@ export default async function PublicStoryPage({
       : Promise.resolve({ data: null }),
     admin
       .from('accounts')
-      .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url')
+      .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url, handle')
       .eq('id', object.account_id)
       .maybeSingle(),
   ])
@@ -351,7 +351,7 @@ export default async function PublicStoryPage({
               </div>
               <div>
                 <p className="text-[11px] tracking-[0.1em] uppercase text-bark m-0 mb-[2px]">From the workshop of</p>
-                <Link href="/maker" className="font-fraunces font-medium text-[17px] text-ink hover:text-cedar transition-colors no-underline">
+                <Link href={accountData?.handle ? `/${accountData.handle}/maker` : '/maker'} className="font-fraunces font-medium text-[17px] text-ink hover:text-cedar transition-colors no-underline">
                   {workshopName}
                 </Link>
               </div>
