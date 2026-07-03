@@ -25,29 +25,27 @@ export default async function ObjectDetailPage({
 
   if (!object) notFound()
 
-  const parent = object.parent_id
-    ? (
-        await supabase
+  const [{ data: parent }, { data: children }, { data: rawPhotos }] = await Promise.all([
+    object.parent_id
+      ? supabase
           .from('wood_objects')
           .select('id, workshop_id, object_type')
           .eq('id', object.parent_id)
           .single()
-      ).data
-    : null
-
-  const { data: children } = await supabase
-    .from('wood_objects')
-    .select('id, workshop_id, object_type, status')
-    .eq('parent_id', id)
-    .order('workshop_id')
-
-  // Fetch photos with signed URLs (1h expiry)
-  const { data: rawPhotos } = await supabase
-    .from('object_photos')
-    .select('id, storage_path, caption, is_public, sort_order')
-    .eq('object_id', id)
-    .eq('account_id', account.id)
-    .order('sort_order')
+      : Promise.resolve({ data: null }),
+    supabase
+      .from('wood_objects')
+      .select('id, workshop_id, object_type, status')
+      .eq('parent_id', id)
+      .order('workshop_id'),
+    // Fetch photos with signed URLs (1h expiry)
+    supabase
+      .from('object_photos')
+      .select('id, storage_path, caption, is_public, sort_order')
+      .eq('object_id', id)
+      .eq('account_id', account.id)
+      .order('sort_order'),
+  ])
 
   let photos: PhotoData[] = []
   if (rawPhotos && rawPhotos.length > 0) {
