@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { saveProfile } from '@/actions/profile'
 import { slugifyHandle, isValidHandle } from '@/lib/handle'
+import { RingsIcon } from '@/components/public-chrome'
 
 interface Props {
   accountId: string
@@ -110,7 +111,7 @@ export function ProfileForm({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
-              <RingsIcon />
+              <RingsIcon size={28} stroke="currentColor" strokeWidth={1.4} className="text-bark" />
             )}
           </button>
           <div>
@@ -243,15 +244,5 @@ export function ProfileForm({
         {saved && <span className="text-sm text-bark">Saved.</span>}
       </div>
     </form>
-  )
-}
-
-function RingsIcon() {
-  return (
-    <svg width="28" height="28" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.4" className="text-bark" aria-hidden="true">
-      <circle cx="20.5" cy="20" r="4"/>
-      <circle cx="20" cy="20" r="10"/>
-      <circle cx="19.5" cy="20" r="16"/>
-    </svg>
   )
 }

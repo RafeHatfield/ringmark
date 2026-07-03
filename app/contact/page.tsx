@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { RingsIcon } from '@/components/public-chrome'
 import { ContactForm } from './contact-form'
 
 export const metadata: Metadata = {
@@ -14,11 +15,7 @@ export default function ContactPage() {
 
         <header className="flex items-center justify-between py-5">
           <Link href="/" className="inline-flex items-center gap-[9px] font-fraunces font-medium text-[19px] text-ink no-underline">
-            <svg width="22" height="22" viewBox="0 0 40 40" fill="none" stroke="#B0612F" strokeWidth="1.6" aria-hidden="true">
-              <circle cx="20.5" cy="20" r="4"/>
-              <circle cx="20" cy="20" r="10"/>
-              <circle cx="19.5" cy="20" r="16"/>
-            </svg>
+            <RingsIcon size={22} />
             Ringmark
           </Link>
         </header>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { RingsIcon } from '@/components/public-chrome'
 
 export const metadata: Metadata = {
   title: 'Ringmark — Keep the story with the piece',
@@ -66,11 +67,7 @@ export default async function LandingPage() {
           {/* Header */}
           <header className="flex items-center justify-between py-5">
             <Link href="/" className="inline-flex items-center gap-[9px] font-fraunces font-medium text-[19px] text-ink no-underline">
-              <svg width="22" height="22" viewBox="0 0 40 40" fill="none" stroke="#B0612F" strokeWidth="1.6" aria-hidden="true">
-                <circle cx="20.5" cy="20" r="4"/>
-                <circle cx="20" cy="20" r="10"/>
-                <circle cx="19.5" cy="20" r="16"/>
-              </svg>
+              <RingsIcon size={22} />
               Ringmark
             </Link>
             <Link
@@ -189,11 +186,7 @@ export default async function LandingPage() {
           {/* Footer */}
           <footer className="text-center py-[36px]">
             <span className="inline-flex items-center gap-2 text-[13px] tracking-[0.04em] text-[#9C9080]">
-              <svg width="15" height="15" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                <circle cx="20.5" cy="20" r="4"/>
-                <circle cx="20" cy="20" r="10"/>
-                <circle cx="19.5" cy="20" r="16"/>
-              </svg>
+              <RingsIcon size={15} stroke="currentColor" />
               Ringmark
             </span>
             <p className="text-[12px] text-[#B0A491] mt-[10px] mb-0">The story stays with the piece.</p>

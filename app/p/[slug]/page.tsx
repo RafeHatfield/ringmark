@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { APP_URL, SIGNED_URL_EXPIRY, typeLabel } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
+import { PublicFooter } from '@/components/public-chrome'
 import { StagePhoto } from './stage-photo'
 
 // Shared leaf-object lookup for generateMetadata + the page body — cache()
@@ -390,14 +391,7 @@ export default async function PublicStoryPage({
             )}
           </article>
 
-          <footer className="text-center py-[30px]">
-            <Link href="/" className="inline-flex items-center gap-2 text-[#9C9080] no-underline text-[12px] tracking-[0.05em] rounded-md px-2 py-1.5 hover:text-heartwood transition-colors">
-              <svg width="16" height="16" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                <circle cx="20.5" cy="20" r="4"/><circle cx="20" cy="20" r="10"/><circle cx="19.5" cy="20" r="16"/>
-              </svg>
-              <span>Tracked with Ringmark</span>
-            </Link>
-          </footer>
+          <PublicFooter />
         </main>
       </div>
     </>

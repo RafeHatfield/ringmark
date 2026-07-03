@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { PublicFooter } from '@/components/public-chrome'
 
 export type MakerAccount = {
   display_name: string | null
@@ -164,21 +165,7 @@ export async function MakerProfile({
             </>
           )}
 
-          {/* Footer */}
-          <footer className="text-center py-[36px]">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 text-[#9C9080] text-[12px] tracking-[0.05em] rounded-md px-2 py-1.5 hover:text-heartwood transition-colors"
-              style={{ textDecoration: 'none' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                <circle cx="20.5" cy="20" r="4"/>
-                <circle cx="20" cy="20" r="10"/>
-                <circle cx="19.5" cy="20" r="16"/>
-              </svg>
-              <span>Tracked with Ringmark</span>
-            </Link>
-          </footer>
+          <PublicFooter paddingClassName="py-[36px]" />
 
         </main>
       </div>
