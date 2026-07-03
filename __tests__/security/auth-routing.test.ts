@@ -30,6 +30,12 @@ import { resolve } from 'node:path'
 
 const src = readFileSync(resolve('./app/p/[slug]/page.tsx'), 'utf8')
 
+// generateMetadata has its own, unrelated is_published check (for SEO — it always
+// falls back to generic metadata for unpublished objects, no ownership concept
+// involved). Scope ordering assertions to the page component body so they test
+// the actual owner-vs-gate invariant instead of tripping on generateMetadata's check.
+const pageBodySrc = src.slice(src.indexOf('export default async function PublicStoryPage'))
+
 describe('auth routing — /p/[slug]', () => {
   it('server-side auth: supabase.auth.getUser() is called (not a client-side hook)', () => {
     assert.ok(
@@ -72,8 +78,8 @@ describe('auth routing — /p/[slug]', () => {
     // Critical invariant: owners must be able to preview their own unpublished drafts.
     // If the is_published gate fired first, owners would hit the "not published yet"
     // wall instead of seeing their draft with the edit bar.
-    const isOwnerSetIdx = src.indexOf('isOwner = ')
-    const publishedGateIdx = src.indexOf('!object.is_published')
+    const isOwnerSetIdx = pageBodySrc.indexOf('isOwner = ')
+    const publishedGateIdx = pageBodySrc.indexOf('!object.is_published')
 
     assert.ok(isOwnerSetIdx !== -1, 'isOwner flag must be set server-side')
     assert.ok(publishedGateIdx !== -1, 'is_published gate must exist')
@@ -108,8 +114,8 @@ describe('auth routing — /p/[slug]', () => {
     // We verify: isOwner is set before the is_published gate, and the gate fires
     // before the JSX render path (indicated by the owner edit bar).
     const publicSelectMarker = "'id, public_slug, account_id, is_published"
-    const isOwnerSetIdx = src.indexOf('isOwner = ')
-    const publishedGateIdx = src.indexOf('!object.is_published')
+    const isOwnerSetIdx = pageBodySrc.indexOf('isOwner = ')
+    const publishedGateIdx = pageBodySrc.indexOf('!object.is_published')
     const publicSelectIdx = src.indexOf(publicSelectMarker)
 
     assert.ok(isOwnerSetIdx !== -1, 'isOwner flag must be set server-side')
@@ -131,10 +137,13 @@ describe('auth routing — /p/[slug]', () => {
     )
   })
 
-  it('is_published filter is applied to the public data fetch', () => {
+  it('is_published gate is applied to the public data fetch', () => {
+    // The leaf-object query is shared between generateMetadata and the page body
+    // (cache()'d so the owner can still preview unpublished drafts), so is_published
+    // can't be a blanket SQL filter — it's enforced as an explicit app-level check.
     assert.ok(
-      src.includes(".eq('is_published', true)"),
-      'public data query must include .eq(is_published, true) as a safety net',
+      src.includes('!object.is_published'),
+      'public data fetch must include an explicit object.is_published check as a safety net',
     )
   })
 })

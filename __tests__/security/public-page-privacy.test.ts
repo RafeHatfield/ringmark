@@ -101,10 +101,14 @@ describe('public page privacy', () => {
     )
   })
 
-  it('object query filters by is_published = true', () => {
+  it('object query gates unpublished objects behind an explicit is_published check', () => {
+    // The leaf-object query is shared between generateMetadata and the page body
+    // (so the page can still preview drafts for the owner), so is_published can't
+    // be a blanket SQL filter. Instead every read path must explicitly gate on
+    // object.is_published before returning real content to a non-owner.
     assert.ok(
-      source.includes(".eq('is_published', true)"),
-      "public page must filter objects with .eq('is_published', true)",
+      source.includes('!object.is_published'),
+      'public page must explicitly check object.is_published before rendering real content',
     )
   })
 })
