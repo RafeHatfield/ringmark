@@ -10,6 +10,12 @@ import {
   togglePhotoVisibility,
   movePhoto,
 } from '@/actions/photos'
+import { resizeImage } from '@/lib/image-resize'
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+)
 
 export type PhotoData = {
   id: string
@@ -37,11 +43,6 @@ export function PhotoSection({
   const [captionValue, setCaptionValue] = useState('')
   const [isPending, startTransition] = useTransition()
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-
   async function handleFiles(files: FileList) {
     if (!files.length) return
     setUploading(true)
@@ -50,13 +51,22 @@ export function PhotoSection({
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-      const filename = `${crypto.randomUUID()}.${ext}`
+
+      let resized: Blob
+      try {
+        resized = await resizeImage(file)
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : `Could not process "${file.name}"`)
+        setUploadCount({ done: i + 1, total: files.length })
+        continue
+      }
+
+      const filename = `${crypto.randomUUID()}.jpg`
       const path = `${accountId}/${objectId}/${filename}`
 
       const { error: storageError } = await supabase.storage
         .from('object-photos')
-        .upload(path, file, { upsert: false })
+        .upload(path, resized, { upsert: false, contentType: 'image/jpeg' })
 
       if (storageError) {
         setUploadError(storageError.message)
