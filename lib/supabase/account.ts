@@ -1,7 +1,8 @@
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Account } from '@/lib/types'
 
-export async function getOrCreateAccount(): Promise<Account> {
+export const getOrCreateAccount = cache(async (): Promise<Account> => {
   const supabase = await createClient()
 
   const {
@@ -41,4 +42,4 @@ export async function getOrCreateAccount(): Promise<Account> {
 
   if (!account) throw new Error('Account not found after creation')
   return account as Account
-}
+})

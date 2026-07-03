@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -9,6 +10,19 @@ import { StagePhoto } from './stage-photo'
 
 const TYPE_LABELS = Object.fromEntries(OBJECT_TYPES.map(t => [t.value, t.label]))
 
+// Shared leaf-object lookup for generateMetadata + the page body — cache()
+// dedupes the query to one call per request regardless of how many times
+// it's invoked with the same slug.
+const getPublishedObject = cache(async (slug: string) => {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('wood_objects')
+    .select('id, public_slug, account_id, is_published, object_type, title, species, public_title, public_story, public_notes, public_care, parent_id, root_id')
+    .eq('public_slug', slug)
+    .maybeSingle()
+  return data
+})
+
 export async function generateMetadata({
   params,
 }: {
@@ -16,18 +30,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
 
-  const admin = createAdminClient()
-  const { data: object } = await admin
-    .from('wood_objects')
-    .select('id, public_title, title, public_story, public_slug, account_id, is_published')
-    .eq('public_slug', slug)
-    .eq('is_published', true)
-    .maybeSingle()
+  const object = await getPublishedObject(slug)
 
-  if (!object) {
+  if (!object || !object.is_published) {
     return { title: 'Ringmark' }
   }
 
+  const admin = createAdminClient()
   const { data: account } = await admin
     .from('accounts')
     .select('workshop_name, display_name, name')
@@ -62,14 +71,10 @@ export default async function PublicStoryPage({
   // Round 1: session + leaf object (by slug)
   const [
     { data: { user } },
-    { data: object },
+    object,
   ] = await Promise.all([
     supabase.auth.getUser(),
-    supabase
-      .from('wood_objects')
-      .select('id, public_slug, account_id, is_published, object_type, title, species, public_title, public_story, public_notes, public_care, parent_id, root_id')
-      .eq('public_slug', slug)
-      .maybeSingle(),
+    getPublishedObject(slug),
   ])
 
   if (!object) {
