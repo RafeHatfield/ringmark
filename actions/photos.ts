@@ -16,7 +16,7 @@ export async function createPhotoRecord(
   // Verify object ownership
   const { data: object } = await supabase
     .from('wood_objects')
-    .select('id')
+    .select('id, public_slug')
     .eq('id', objectId)
     .eq('account_id', account.id)
     .single()
@@ -48,14 +48,8 @@ export async function createPhotoRecord(
 
   if (error || !created) return { error: error?.message ?? 'Failed to save photo.' }
 
-  const { data: obj } = await supabase
-    .from('wood_objects')
-    .select('public_slug')
-    .eq('id', objectId)
-    .single()
-
   revalidatePath(`/objects/${objectId}`)
-  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
+  if (object.public_slug) revalidatePath(`/p/${object.public_slug}`)
   return { id: created.id }
 }
 
@@ -65,7 +59,7 @@ export async function deletePhoto(photoId: string): Promise<{ error?: string }> 
 
   const { data: photo } = await supabase
     .from('object_photos')
-    .select('id, storage_path, object_id')
+    .select('id, storage_path, object_id, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
     .single()
@@ -82,14 +76,8 @@ export async function deletePhoto(photoId: string): Promise<{ error?: string }> 
 
   if (error) return { error: error.message }
 
-  const { data: obj } = await supabase
-    .from('wood_objects')
-    .select('public_slug')
-    .eq('id', photo.object_id)
-    .single()
-
   revalidatePath(`/objects/${photo.object_id}`)
-  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
+  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
   return {}
 }
 
@@ -102,7 +90,7 @@ export async function updatePhotoCaption(
 
   const { data: photo } = await supabase
     .from('object_photos')
-    .select('id, object_id')
+    .select('id, object_id, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
     .single()
@@ -116,14 +104,8 @@ export async function updatePhotoCaption(
 
   if (error) return { error: error.message }
 
-  const { data: obj } = await supabase
-    .from('wood_objects')
-    .select('public_slug')
-    .eq('id', photo.object_id)
-    .single()
-
   revalidatePath(`/objects/${photo.object_id}`)
-  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
+  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
   return {}
 }
 
@@ -133,7 +115,7 @@ export async function togglePhotoVisibility(photoId: string): Promise<{ error?: 
 
   const { data: photo } = await supabase
     .from('object_photos')
-    .select('id, is_public, object_id')
+    .select('id, is_public, object_id, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
     .single()
@@ -147,14 +129,8 @@ export async function togglePhotoVisibility(photoId: string): Promise<{ error?: 
 
   if (error) return { error: error.message }
 
-  const { data: obj } = await supabase
-    .from('wood_objects')
-    .select('public_slug')
-    .eq('id', photo.object_id)
-    .single()
-
   revalidatePath(`/objects/${photo.object_id}`)
-  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
+  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
   return {}
 }
 
@@ -167,7 +143,7 @@ export async function movePhoto(
 
   const { data: photo } = await supabase
     .from('object_photos')
-    .select('id, object_id, sort_order')
+    .select('id, object_id, sort_order, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
     .single()
@@ -191,13 +167,7 @@ export async function movePhoto(
     supabase.from('object_photos').update({ sort_order: a.sort_order }).eq('id', b.id),
   ])
 
-  const { data: obj } = await supabase
-    .from('wood_objects')
-    .select('public_slug')
-    .eq('id', photo.object_id)
-    .single()
-
   revalidatePath(`/objects/${photo.object_id}`)
-  if (obj?.public_slug) revalidatePath(`/p/${obj.public_slug}`)
+  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
   return {}
 }

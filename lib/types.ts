@@ -220,7 +220,15 @@ export interface Database {
         Row: ObjectPhoto
         Insert: ObjectPhotoInsert
         Update: ObjectPhotoUpdate
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'object_photos_object_id_fkey'
+            columns: ['object_id']
+            isOneToOne: false
+            referencedRelation: 'wood_objects'
+            referencedColumns: ['id']
+          }
+        ]
       }
     }
     Views: { [_ in never]: never }
