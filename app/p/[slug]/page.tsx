@@ -67,7 +67,7 @@ export default async function PublicStoryPage({
     supabase.auth.getUser(),
     supabase
       .from('wood_objects')
-      .select('id, public_slug, account_id, is_published, object_type, title, species, public_title, public_story, public_notes, public_care, parent_id')
+      .select('id, public_slug, account_id, is_published, object_type, title, species, public_title, public_story, public_notes, public_care, parent_id, root_id')
       .eq('public_slug', slug)
       .maybeSingle(),
   ])
@@ -110,20 +110,35 @@ export default async function PublicStoryPage({
     species: string | null
   }
   const chain: ChainStep[] = []
-  let currentId: string | null = object.id
 
-  while (currentId) {
-    const nextId: string = currentId
-    const { data: step } = await admin
+  if (object.root_id) {
+    const { data: treeRows } = await admin
       .from('wood_objects')
       .select('id, parent_id, object_type, title, public_story, public_notes, public_care, species')
-      .eq('id', nextId)
+      .eq('root_id', object.root_id)
       .eq('account_id', object.account_id)
-      .maybeSingle()
 
-    if (!step) break
-    chain.unshift(step as ChainStep)
-    currentId = (step as ChainStep).parent_id
+    const rowsById = new Map<string, ChainStep>((treeRows ?? []).map(row => [row.id, row as ChainStep]))
+
+    let currentId: string | null = object.id
+    while (currentId) {
+      const step = rowsById.get(currentId)
+      if (!step) break
+      chain.unshift(step)
+      currentId = step.parent_id
+    }
+  } else {
+    // Legacy rows without a root_id: fall back to a chain of just the leaf.
+    chain.push({
+      id: object.id,
+      parent_id: object.parent_id,
+      object_type: object.object_type,
+      title: object.title,
+      public_story: object.public_story,
+      public_notes: object.public_notes,
+      public_care: object.public_care,
+      species: object.species,
+    } as ChainStep)
   }
 
   // Fetch ALL public photos for every step in one query so each stage can
