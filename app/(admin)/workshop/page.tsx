@@ -65,22 +65,22 @@ export default async function WorkshopPage({
       .limit(50)
     searchObjects = data
   } else {
-    // Count roots for pagination
-    const { count } = await supabase
-      .from('wood_objects')
-      .select('id', { count: 'exact', head: true })
-      .eq('account_id', account.id)
-      .is('parent_id', null)
+    // Count roots for pagination, and fetch the paginated/sorted roots — independent queries
+    const [{ count }, { data: pagedRoots }] = await Promise.all([
+      supabase
+        .from('wood_objects')
+        .select('id', { count: 'exact', head: true })
+        .eq('account_id', account.id)
+        .is('parent_id', null),
+      supabase
+        .from('wood_objects')
+        .select('id, workshop_id, object_type, status, title, species, parent_id, root_id, updated_at')
+        .eq('account_id', account.id)
+        .is('parent_id', null)
+        .order(DB_COL[sortCol], { ascending: sortDir === 'asc', nullsFirst: false })
+        .range(from, to),
+    ])
     totalRoots = count ?? 0
-
-    // Fetch paginated, sorted roots
-    const { data: pagedRoots } = await supabase
-      .from('wood_objects')
-      .select('id, workshop_id, object_type, status, title, species, parent_id, root_id, updated_at')
-      .eq('account_id', account.id)
-      .is('parent_id', null)
-      .order(DB_COL[sortCol], { ascending: sortDir === 'asc', nullsFirst: false })
-      .range(from, to)
 
     if (pagedRoots && pagedRoots.length > 0) {
       const rootIds = pagedRoots.map((r) => r.id)
