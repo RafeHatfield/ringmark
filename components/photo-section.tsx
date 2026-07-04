@@ -18,6 +18,25 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 )
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const current = nextIndex++
+      results[current] = await fn(items[current])
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
 export type PhotoData = {
   id: string
   storage_path: string
@@ -47,43 +66,50 @@ export function PhotoSection({
 
   async function handleFiles(files: FileList) {
     if (!files.length) return
+    const fileArray = Array.from(files)
     setUploading(true)
     setUploadError('')
-    setUploadCount({ done: 0, total: files.length })
+    setUploadCount({ done: 0, total: fileArray.length })
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
+    // Phase A (concurrent, limit 3): resize + upload to storage. Order of
+    // completion isn't guaranteed, but results are stored by input index so
+    // Phase B can still process them in selection order.
+    const uploadResults = await mapWithConcurrency<File, { path: string } | { error: string }>(
+      fileArray,
+      3,
+      async (file) => {
+        let result: { path: string } | { error: string }
+        try {
+          const resized = await resizeImage(file)
+          const filename = `${crypto.randomUUID()}.jpg`
+          const path = `${accountId}/${objectId}/${filename}`
 
-      let resized: Blob
-      try {
-        resized = await resizeImage(file)
-      } catch (err) {
-        setUploadError(err instanceof Error ? err.message : `Could not process "${file.name}"`)
-        setUploadCount({ done: i + 1, total: files.length })
-        continue
+          const { error: storageError } = await supabase.storage
+            .from('object-photos')
+            .upload(path, resized, { upsert: false, contentType: 'image/jpeg' })
+
+          result = storageError ? { error: storageError.message } : { path }
+        } catch (err) {
+          result = { error: err instanceof Error ? err.message : `Could not process "${file.name}"` }
+        }
+        setUploadCount((c) => ({ ...c, done: c.done + 1 }))
+        return result
+      },
+    )
+
+    const firstError = uploadResults.find((r): r is { error: string } => 'error' in r)
+    if (firstError) setUploadError(firstError.error)
+
+    // Phase B (sequential, in input order): create DB records so sort_order
+    // (assigned via a max-query) stays sequential. A failed record stops
+    // Phase B; photos already recorded stay.
+    for (const result of uploadResults) {
+      if ('error' in result) continue
+      const dbResult = await createPhotoRecord(objectId, result.path, null)
+      if (dbResult.error) {
+        setUploadError(dbResult.error)
+        break
       }
-
-      const filename = `${crypto.randomUUID()}.jpg`
-      const path = `${accountId}/${objectId}/${filename}`
-
-      const { error: storageError } = await supabase.storage
-        .from('object-photos')
-        .upload(path, resized, { upsert: false, contentType: 'image/jpeg' })
-
-      if (storageError) {
-        setUploadError(storageError.message)
-        setUploading(false)
-        return
-      }
-
-      const result = await createPhotoRecord(objectId, path, null)
-      if (result.error) {
-        setUploadError(result.error)
-        setUploading(false)
-        return
-      }
-
-      setUploadCount({ done: i + 1, total: files.length })
     }
 
     setUploading(false)
