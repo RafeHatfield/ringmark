@@ -96,8 +96,9 @@ test('child detail page shows parent in lineage section', async ({ page }) => {
   await page.goto(`/objects/${childId}`)
   // The parent appears as a link with exact text (child/grandchild IDs also contain the prefix)
   await expect(page.getByRole('link', { name: sourceWorkshopId, exact: true })).toBeVisible()
-  // "Parent" label should be visible in the lineage section
-  await expect(page.getByText('Parent')).toBeVisible()
+  // "Parent" label should be visible in the lineage section (exact — the Danger
+  // Zone copy on this page mentions "re-parent", which substring-matches "Parent")
+  await expect(page.getByText('Parent', { exact: true })).toBeVisible()
 })
 
 // ── Flat ID invariant ────────────────────────────────────────────────────────
@@ -114,7 +115,7 @@ test('grandchild ID is flat under root — not a nested path', async ({ page }) 
 
 test('grandchild lineage shows correct parent (child, not source)', async ({ page }) => {
   await page.goto(`/objects/${grandchildId}`)
-  await expect(page.getByText('Parent')).toBeVisible()
+  await expect(page.getByText('Parent', { exact: true })).toBeVisible()
   await expect(page.getByText(childWorkshopId)).toBeVisible()
 })
 

@@ -124,8 +124,10 @@ export default async function PublicStoryPage({
 
     const rowsById = new Map<string, ChainStep>((treeRows ?? []).map(row => [row.id, row as ChainStep]))
 
+    const visited = new Set<string>()
     let currentId: string | null = object.id
-    while (currentId) {
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId)
       const step = rowsById.get(currentId)
       if (!step) break
       chain.unshift(step)

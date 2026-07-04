@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { generateSlug } from '@/lib/slug-gen'
 import type { ObjectType, ObjectStatus, SpeciesConfidence, WoodObjectUpdate } from '@/lib/types'
-import { computeRootId } from '@/lib/lineage-utils'
+import { computeRootId, collectSubtreeIds } from '@/lib/lineage-utils'
 
 export type CreateObjectData = {
   workshop_id: string
@@ -48,6 +48,7 @@ export async function createObject(
       .from('wood_objects')
       .select('root_id, species')
       .eq('id', data.parent_id)
+      .eq('account_id', account.id)
       .single()
     root_id = parent?.root_id ?? null
     parentSpecies = parent?.species ?? null
@@ -118,7 +119,7 @@ export async function updateObject(
 
   const { data: existing } = await supabase
     .from('wood_objects')
-    .select('id, workshop_id_lower')
+    .select('id, workshop_id_lower, root_id')
     .eq('id', id)
     .eq('account_id', account.id)
     .single()
@@ -150,8 +151,31 @@ export async function updateObject(
   }
 
   // Re-parenting: update parent_id and derive new root_id
+  let subtreeIds: Set<string> | null = null
+  let newRootId: string | null = null
   if ('parent_id' in data) {
     const newParentId = data.parent_id ?? null
+
+    if (newParentId) {
+      // Fetch the object's current subtree so we can (a) reject parenting to a
+      // descendant and (b) cascade the new root_id to the whole subtree below.
+      const { data: treeRows } = existing.root_id
+        ? await supabase
+            .from('wood_objects')
+            .select('id, parent_id')
+            .eq('account_id', account.id)
+            .eq('root_id', existing.root_id)
+        : await supabase
+            .from('wood_objects')
+            .select('id, parent_id')
+            .eq('account_id', account.id)
+
+      subtreeIds = collectSubtreeIds(treeRows ?? [], id)
+      if (subtreeIds.has(newParentId)) {
+        return { error: 'Cannot set parent to this object or one of its descendants.' }
+      }
+    }
+
     payload.parent_id = newParentId
 
     let newParentRootId: string | null = null
@@ -160,10 +184,12 @@ export async function updateObject(
         .from('wood_objects')
         .select('root_id')
         .eq('id', newParentId)
+        .eq('account_id', account.id)
         .single()
       newParentRootId = newParent?.root_id ?? null
     }
-    payload.root_id = computeRootId(newParentId, newParentRootId, id)
+    newRootId = computeRootId(newParentId, newParentRootId, id)
+    payload.root_id = newRootId
   }
 
   payload.updated_at = new Date().toISOString()
@@ -175,6 +201,18 @@ export async function updateObject(
     .eq('account_id', account.id)
 
   if (error) return { error: error.message }
+
+  // Cascade the new root_id to the rest of the subtree that moved with this object.
+  if (subtreeIds) {
+    const descendantIds = [...subtreeIds].filter((subId) => subId !== id)
+    if (descendantIds.length > 0) {
+      await supabase
+        .from('wood_objects')
+        .update({ root_id: newRootId })
+        .in('id', descendantIds)
+        .eq('account_id', account.id)
+    }
+  }
 
   revalidatePath(`/objects/${id}`)
   revalidatePath('/')
