@@ -60,6 +60,33 @@ test('Cancel returns to the normal delete button without deleting', async ({ pag
   await expect(page).toHaveURL(`/objects/${objectId}`)
 })
 
+test('deleting an object with children shows an inline error, not a silent no-op', async ({ page }) => {
+  // Separate parent/child pair, kept isolated from objectId used by the other tests.
+  await page.goto('/objects/new?type=source')
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
+  const parentId = page.url().split('/objects/')[1]
+
+  await page.getByRole('link', { name: '+ Add Child' }).click()
+  await page.waitForURL(/\/child\/new/)
+  await page.locator('select').first().selectOption('blank')
+  await Promise.all([
+    page.waitForURL(/\/objects\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    page.getByRole('button', { name: 'Save' }).click(),
+  ])
+
+  await page.goto(`/objects/${parentId}`)
+  await page.getByRole('button', { name: 'Delete object' }).click()
+  await page.getByRole('button', { name: 'Yes, delete permanently' }).click()
+
+  // Error shown inline; object is not deleted, no redirect.
+  await expect(page.getByText(/has children/i)).toBeVisible()
+  await expect(page).toHaveURL(`/objects/${parentId}`)
+  await expect(page.getByRole('button', { name: 'Delete object' })).toBeVisible()
+})
+
 test('confirming deletion removes the object and redirects home', async ({ page }) => {
   await page.goto(`/objects/${objectId}`)
 

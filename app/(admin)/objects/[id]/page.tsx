@@ -300,8 +300,8 @@ export default async function ObjectDetailPage({
           Danger Zone
         </h2>
         <p className="text-xs text-bark mb-4">
-          Permanently deletes this object, all its photos, and removes it from any lineage trees.
-          Children are not deleted but become roots.
+          Permanently deletes this object and all its photos. Objects with children
+          can&apos;t be deleted — delete or re-parent the children first.
         </p>
         <DeleteObjectButton objectId={id} />
       </section>

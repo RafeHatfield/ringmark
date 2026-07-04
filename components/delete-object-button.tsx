@@ -6,6 +6,7 @@ import { deleteObject } from '@/actions/objects'
 
 export function DeleteObjectButton({ objectId }: { objectId: string }) {
   const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -13,6 +14,7 @@ export function DeleteObjectButton({ objectId }: { objectId: string }) {
     startTransition(async () => {
       const result = await deleteObject(objectId)
       if (result.error) {
+        setError(result.error)
         setConfirming(false)
         return
       }
@@ -42,11 +44,16 @@ export function DeleteObjectButton({ objectId }: { objectId: string }) {
   }
 
   return (
-    <button
-      onClick={() => setConfirming(true)}
-      className="px-4 py-2.5 border border-destructive/40 text-destructive rounded-md text-sm font-medium hover:bg-destructive hover:text-destructive-foreground transition-colors"
-    >
-      Delete object
-    </button>
+    <div>
+      <button
+        onClick={() => setConfirming(true)}
+        className="px-4 py-2.5 border border-destructive/40 text-destructive rounded-md text-sm font-medium hover:bg-destructive hover:text-destructive-foreground transition-colors"
+      >
+        Delete object
+      </button>
+      {error && (
+        <p className="text-sm text-destructive mt-2">{error}</p>
+      )}
+    </div>
   )
 }

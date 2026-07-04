@@ -192,6 +192,42 @@ export async function deleteObject(id: string): Promise<{ error?: string }> {
   const supabase = await createClient()
   const account = await getOrCreateAccount()
 
+  const { data: existing } = await supabase
+    .from('wood_objects')
+    .select('public_slug')
+    .eq('id', id)
+    .eq('account_id', account.id)
+    .single()
+
+  if (!existing) return { error: 'Object not found.' }
+
+  const { data: children } = await supabase
+    .from('wood_objects')
+    .select('workshop_id')
+    .eq('parent_id', id)
+    .eq('account_id', account.id)
+
+  if (children && children.length > 0) {
+    const ids = children.map((c) => c.workshop_id).join(', ')
+    return { error: `This object has children (${ids}). Delete or re-parent them first.` }
+  }
+
+  // Remove photo storage files (best-effort — DB records cascade automatically)
+  const { data: photos } = await supabase
+    .from('object_photos')
+    .select('storage_path')
+    .eq('object_id', id)
+    .eq('account_id', account.id)
+
+  if (photos && photos.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from('object-photos')
+      .remove(photos.map((p) => p.storage_path))
+    if (storageError) {
+      console.error('[deleteObject] storage remove failed:', storageError.message)
+    }
+  }
+
   const { error } = await supabase
     .from('wood_objects')
     .delete()
