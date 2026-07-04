@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createObject, checkWorkshopId } from '@/actions/objects'
+import { FormField } from '@/components/form-field'
 import { OBJECT_TYPES, OBJECT_STATUSES, SPECIES_CONFIDENCE_LEVELS } from '@/lib/constants'
 import type { ObjectType, ObjectStatus, SpeciesConfidence } from '@/lib/types'
 
@@ -81,8 +82,7 @@ export default function ObjectForm({
   }
 
   const workshopIdField = (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">Workshop ID</label>
+    <FormField label="Workshop ID">
       <input
         value={workshopId}
         onChange={handleIdChange}
@@ -102,28 +102,22 @@ export default function ObjectForm({
             </p>
           )
       }
-    </div>
+    </FormField>
   )
 
   const statusField = (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">
-        Status <span className="text-xs text-bark font-normal ml-1">optional</span>
-      </label>
+    <FormField label="Status" hint="optional">
       <select value={status} onChange={e => setStatus(e.target.value as ObjectStatus)} className={fieldClass}>
         <option value="">None</option>
         {OBJECT_STATUSES.map(s => (
           <option key={s.value} value={s.value}>{s.label}</option>
         ))}
       </select>
-    </div>
+    </FormField>
   )
 
   const titleField = (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">
-        Title <span className="text-xs text-bark font-normal ml-1">optional</span>
-      </label>
+    <FormField label="Title" hint="optional">
       <input
         value={title}
         onChange={e => setTitle(e.target.value)}
@@ -131,14 +125,11 @@ export default function ObjectForm({
         placeholder={parent ? 'e.g. First bowl blank' : 'e.g. Backyard maple — Lynn Valley'}
         maxLength={200}
       />
-    </div>
+    </FormField>
   )
 
   const speciesField = parent ? (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">
-        Species <span className="text-xs text-bark font-normal ml-1">optional</span>
-      </label>
+    <FormField label="Species" hint="optional">
       <input
         value={species}
         onChange={e => setSpecies(e.target.value)}
@@ -146,12 +137,9 @@ export default function ObjectForm({
         placeholder="Inherits from parent if blank"
         maxLength={100}
       />
-    </div>
+    </FormField>
   ) : (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">
-        Species <span className="text-xs text-bark font-normal ml-1">optional</span>
-      </label>
+    <FormField label="Species" hint="optional">
       <div className="flex gap-2">
         <input
           value={species}
@@ -173,28 +161,22 @@ export default function ObjectForm({
           </select>
         )}
       </div>
-    </div>
+    </FormField>
   )
 
   const stepNotesField = (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">
-        Step notes <span className="text-xs text-bark font-normal ml-1">optional · shown in journey</span>
-      </label>
+    <FormField label="Step notes" hint="optional · shown in journey">
       <textarea
         value={stepNotes}
         onChange={e => setStepNotes(e.target.value)}
         className={`${fieldClass} min-h-[80px] resize-y`}
         placeholder="What's notable about this step?"
       />
-    </div>
+    </FormField>
   )
 
   const privateNotesField = (
-    <div>
-      <label className="block text-sm font-medium mb-1.5">
-        Private notes <span className="text-xs text-bark font-normal ml-1">optional</span>
-      </label>
+    <FormField label="Private notes" hint="optional">
       <textarea
         value={privateNotes}
         onChange={e => setPrivateNotes(e.target.value)}
@@ -205,7 +187,7 @@ export default function ObjectForm({
             : (isSource ? 'Where did this wood come from? Who gave it to you?' : 'Any notes for yourself (never shown publicly).')
         }
       />
-    </div>
+    </FormField>
   )
 
   return (

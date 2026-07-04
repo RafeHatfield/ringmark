@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveStory, publishObject, unpublishObject } from '@/actions/story'
+import { FormField } from '@/components/form-field'
 import { DEFAULT_CARE_INSTRUCTIONS } from '@/lib/constants'
 
 const fieldClass =
@@ -121,11 +122,7 @@ export default function StoryEditor({
 
       {/* Story form */}
       <form onSubmit={handleSave} className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium mb-1.5">
-            Public title{' '}
-            <span className="text-xs text-bark font-normal ml-1">optional</span>
-          </label>
+        <FormField label="Public title" hint="optional">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -136,36 +133,27 @@ export default function StoryEditor({
           <p className="mt-1 text-xs text-bark">
             Shown at the top of the public page. Defaults to the workshop ID if blank.
           </p>
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block text-sm font-medium mb-1.5">
-            Story{' '}
-            <span className="text-xs text-bark font-normal ml-1">optional</span>
-          </label>
+        <FormField label="Story" hint="optional">
           <textarea
             value={story}
             onChange={(e) => setStory(e.target.value)}
             className={`${fieldClass} min-h-[140px] resize-y`}
             placeholder="Where this wood came from, why it matters to you, what it became…"
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block text-sm font-medium mb-1.5">
-            Public notes{' '}
-            <span className="text-xs text-bark font-normal ml-1">optional</span>
-          </label>
+        <FormField label="Public notes" hint="optional">
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             className={`${fieldClass} min-h-[80px] resize-y`}
             placeholder="Species, dimensions, finish — anything you want buyers to know"
           />
-        </div>
+        </FormField>
 
-        <div>
-          <label className="block text-sm font-medium mb-1.5">Care instructions</label>
+        <FormField label="Care instructions">
           <textarea
             value={care}
             onChange={(e) => setCare(e.target.value)}
@@ -174,7 +162,7 @@ export default function StoryEditor({
           <p className="mt-1 text-xs text-bark">
             Shown on the public page. Edit to suit this piece.
           </p>
-        </div>
+        </FormField>
 
         {saveError && <p className="text-sm text-destructive">{saveError}</p>}
         {saved && <p className="text-sm text-green-600 dark:text-green-400">Saved.</p>}

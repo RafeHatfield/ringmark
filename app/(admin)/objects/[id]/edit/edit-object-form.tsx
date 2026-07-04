@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateObject, checkWorkshopId, searchObjects } from '@/actions/objects'
+import { FormField } from '@/components/form-field'
 import {
   OBJECT_TYPES,
   OBJECT_STATUSES,
@@ -159,8 +160,7 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div>
-        <label className="block text-sm font-medium mb-1.5">Workshop ID</label>
+      <FormField label="Workshop ID">
         <input
           value={workshopId}
           onChange={handleIdChange}
@@ -170,32 +170,27 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
           maxLength={20}
         />
         {idError && <p className="mt-1 text-xs text-destructive">{idError}</p>}
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">Type</label>
+      <FormField label="Type">
         <select value={type} onChange={e => setType(e.target.value as ObjectType)} className={fieldClass}>
           {OBJECT_TYPES.map(t => (
             <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">Status</label>
+      <FormField label="Status">
         <select value={status} onChange={e => setStatus(e.target.value as ObjectStatus)} className={fieldClass}>
           <option value="">None</option>
           {OBJECT_STATUSES.map(s => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
-      </div>
+      </FormField>
 
       {/* Parent */}
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Parent <span className="text-xs text-bark font-normal ml-1">optional</span>
-        </label>
+      <FormField label="Parent" hint="optional">
         {parentId && parentDisplay && !showParentSearch ? (
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm font-medium px-3 py-2 border border-hairline rounded-md bg-sand">
@@ -233,19 +228,13 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
             )}
           </div>
         )}
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Title <span className="text-xs text-bark font-normal ml-1">optional</span>
-        </label>
+      <FormField label="Title" hint="optional">
         <input value={title} onChange={e => setTitle(e.target.value)} className={fieldClass} placeholder="e.g. Backyard maple — Lynn Valley" maxLength={200} />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Species <span className="text-xs text-bark font-normal ml-1">optional</span>
-        </label>
+      <FormField label="Species" hint="optional">
         <div className="flex gap-2">
           <input value={species} onChange={e => setSpecies(e.target.value)} className={fieldClass} placeholder="e.g. Hard maple" maxLength={100} />
           {species && (
@@ -257,54 +246,36 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
             </select>
           )}
         </div>
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Dimensions <span className="text-xs text-bark font-normal ml-1">optional</span>
-        </label>
+      <FormField label="Dimensions" hint="optional">
         <input value={dimensions} onChange={e => setDimensions(e.target.value)} className={fieldClass} placeholder='e.g. 18" diameter, 4ft length' maxLength={200} />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Finish <span className="text-xs text-bark font-normal ml-1">optional</span>
-        </label>
+      <FormField label="Finish" hint="optional">
         <input value={finish} onChange={e => setFinish(e.target.value)} className={fieldClass} placeholder="e.g. Osmo Polyx Oil" maxLength={200} />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Lineage confidence <span className="text-xs text-bark font-normal ml-1">optional</span>
-        </label>
+      <FormField label="Lineage confidence" hint="optional">
         <select value={lineageConf} onChange={e => setLineageConf(e.target.value as LineageConfidence)} className={fieldClass}>
           <option value="">Not set</option>
           {LINEAGE_CONFIDENCE_LEVELS.map(l => (
             <option key={l.value} value={l.value}>{l.label}</option>
           ))}
         </select>
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Location <span className="text-xs text-bark font-normal ml-1">private · optional</span>
-        </label>
+      <FormField label="Location" hint="private · optional">
         <input value={location} onChange={e => setLocation(e.target.value)} className={fieldClass} placeholder="e.g. Shelf 3, green bin" maxLength={200} />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Step notes <span className="text-xs text-bark font-normal ml-1">optional · shown in journey</span>
-        </label>
+      <FormField label="Step notes" hint="optional · shown in journey">
         <textarea value={stepNotes} onChange={e => setStepNotes(e.target.value)} className={`${fieldClass} min-h-[80px] resize-y`} placeholder="What's notable about this step?" />
-      </div>
+      </FormField>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          Private notes <span className="text-xs text-bark font-normal ml-1">optional</span>
-        </label>
+      <FormField label="Private notes" hint="optional">
         <textarea value={privateNotes} onChange={e => setPrivateNotes(e.target.value)} className={`${fieldClass} min-h-[80px] resize-y`} />
-      </div>
+      </FormField>
 
       {formError && <p className="text-sm text-destructive">{formError}</p>}
 
