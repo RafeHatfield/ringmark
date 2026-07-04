@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#FBF6EE">
+<title>Lightning Oak Bowl · Ringmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBF6EE;--ink:#2B2620;--bark:#6E6456;--cedar:#B0612F;--heartwood:#7A3F1D;
+    --sand:#F1E7D5;--hairline:#E7DAC4;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .page{max-width:480px;margin:0 auto;padding:0 22px;}
+
+  .eyebrow{text-align:center;font-size:12px;letter-spacing:0.16em;text-transform:uppercase;color:var(--cedar);padding:30px 0 18px;margin:0;}
+
+  .hero{aspect-ratio:4/3;border-radius:14px;background:var(--cedar);overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  .hero img{width:100%;height:100%;object-fit:cover;display:block;}
+  .hero .ph{color:var(--heartwood);}
+
+  .title{font-family:var(--serif);font-optical-sizing:auto;font-weight:500;font-size:30px;line-height:1.15;letter-spacing:-0.01em;margin:24px 0 6px;}
+  .origin{font-size:13px;color:var(--cedar);margin:0;}
+
+  /* section heading */
+  .life-head{display:flex;align-items:center;gap:14px;margin:34px 0 20px;}
+  .life-head .line{height:1px;background:var(--hairline);flex:1;}
+  .life-head .label{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#9A8466;}
+
+  /* timeline */
+  .stage{position:relative;padding-left:32px;padding-bottom:28px;}
+  .stage:last-child{padding-bottom:0;}
+  .stage:not(:last-child)::before{content:"";position:absolute;left:6px;top:20px;bottom:-4px;width:2px;background:var(--hairline);}
+  .stage .node{position:absolute;left:0;top:7px;width:14px;height:14px;border-radius:50%;background:var(--paper);border:2px solid #CDA074;}
+  .stage.is-source .node{border-color:var(--cedar);}
+  .stage.is-final .node{background:var(--cedar);border-color:var(--cedar);}
+  .stage .slabel{font-size:11px;letter-spacing:0.09em;text-transform:uppercase;color:#9A8466;margin-bottom:10px;}
+  .stage .shot{position:relative;border-radius:11px;overflow:hidden;background:var(--cedar);aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;}
+  .stage .shot img{width:100%;height:100%;object-fit:cover;}
+  .stage .shot .ph{color:var(--heartwood);}
+  .stage .shot .count{position:absolute;top:9px;right:9px;background:var(--heartwood);color:#FBF1E6;font-size:11px;padding:2px 9px;border-radius:20px;}
+  .stage .note{font-family:var(--serif);font-optical-sizing:auto;font-weight:400;font-size:16px;line-height:1.65;color:#433B30;margin:12px 0 0;}   /* bookend voice */
+  .stage .aside{font-size:14px;font-style:italic;line-height:1.55;color:var(--bark);margin:11px 0 0;}                                          /* mid-journey caption */
+
+  /* maker */
+  .maker{display:flex;align-items:center;gap:14px;margin:30px 0;padding:14px 0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);}
+  .maker .avatar{width:46px;height:46px;border-radius:50%;background:var(--sand);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+  .maker .avatar img{width:100%;height:100%;object-fit:cover;}
+  .maker .label{font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--bark);margin:0 0 2px;}
+  .maker .name{font-family:var(--serif);font-weight:500;font-size:17px;color:var(--ink);margin:0;}
+
+  /* care */
+  .care{background:var(--sand);border-radius:12px;padding:18px 20px;}
+  .care h2{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--cedar);margin:0 0 8px;font-weight:500;font-family:var(--sans);}
+  .care p{font-size:15px;line-height:1.62;color:#574F44;margin:0;}
+
+  .foot{text-align:center;padding:30px 0 36px;}
+  .foot a{display:inline-flex;align-items:center;gap:8px;color:#9C9080;text-decoration:none;font-size:12px;letter-spacing:0.05em;border-radius:6px;padding:6px 8px;}
+  .foot a:hover{color:var(--heartwood);}
+  .foot a:focus-visible{outline:2px solid var(--cedar);outline-offset:2px;}
+
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+  @keyframes rise{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+  .reveal{animation:rise .7s cubic-bezier(.2,.6,.2,1) both;}
+  .reveal.d1{animation-delay:.07s;}.reveal.d2{animation-delay:.14s;}
+  .stage{animation:rise .6s cubic-bezier(.2,.6,.2,1) both;}
+  .stage:nth-child(1){animation-delay:.04s;}.stage:nth-child(2){animation-delay:.12s;}
+  .stage:nth-child(3){animation-delay:.20s;}.stage:nth-child(4){animation-delay:.28s;}.stage:nth-child(5){animation-delay:.36s;}
+  @media (prefers-reduced-motion:reduce){.reveal,.stage{animation:none;}}
+
+  /* camera placeholder icon */
+  .cam{width:30px;height:30px;}
+</style>
+</head>
+<body>
+  <main class="page">
+    <article>
+
+      <p class="eyebrow reveal">Before it was yours</p>
+
+      <!-- HERO = the finished piece (fixed glory shot). Swap for <div class="hero"><img src="…" alt="…"></div> -->
+      <div class="hero reveal">
+        <svg class="cam ph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+      </div>
+
+      <header class="reveal d1">
+        <h1 class="title">Lightning Oak Bowl</h1>
+        <p class="origin">White oak · struck by lightning</p>
+      </header>
+
+      <div class="life-head reveal d2">
+        <span class="line"></span><span class="label">Its life so far</span><span class="line"></span>
+      </div>
+
+      <!-- TIMELINE: render one .stage per logged stage, in order. -->
+      <div class="timeline">
+
+        <!-- SOURCE — note gets the serif "bookend" voice -->
+        <section class="stage is-source">
+          <span class="node" aria-hidden="true"></span>
+          <p class="slabel">The tree</p>
+          <div class="shot">
+            <svg class="cam ph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+          </div>
+          <p class="note">I found this white oak split down one side, where lightning had run through it years before. The scorch line still lives in the grain.</p>
+        </section>
+
+        <!-- SLABS — optional mid-journey note rides as a light caption -->
+        <section class="stage">
+          <span class="node" aria-hidden="true"></span>
+          <p class="slabel">Cut into slabs</p>
+          <div class="shot">
+            <svg class="cam ph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            <span class="count">+1</span>
+          </div>
+          <p class="aside">The colour inside was extraordinary — amber, streaked with the dark mineral lines the strike left behind.</p>
+        </section>
+
+        <!-- BLANKS — no note: just the photo and its label -->
+        <section class="stage">
+          <span class="node" aria-hidden="true"></span>
+          <p class="slabel">Shaped to blanks</p>
+          <div class="shot">
+            <svg class="cam ph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            <span class="count">+1</span>
+          </div>
+        </section>
+
+        <!-- ROUGH — no note -->
+        <section class="stage">
+          <span class="node" aria-hidden="true"></span>
+          <p class="slabel">Rough-turned</p>
+          <div class="shot">
+            <svg class="cam ph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+          </div>
+        </section>
+
+        <!-- FINISHED — note gets the serif "bookend" voice and closes the page -->
+        <section class="stage is-final">
+          <span class="node" aria-hidden="true"></span>
+          <p class="slabel">Finished</p>
+          <div class="shot">
+            <svg class="cam ph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/></svg>
+            <span class="count">+2</span>
+          </div>
+          <p class="note">Turned thin enough to catch the light at the rim. Forty years standing, an afternoon on the lathe — and now it's yours to use.</p>
+        </section>
+
+      </div>
+
+      <!-- MAKER: avatar defaults to the Ringmark mark -->
+      <div class="maker">
+        <div class="avatar" aria-hidden="true">
+          <svg width="30" height="30" viewBox="0 0 40 40" fill="none" stroke="#B0612F" stroke-width="1.3"><circle cx="21" cy="20" r="3"/><circle cx="20.5" cy="20" r="7"/><circle cx="20" cy="20" r="11.5"/><circle cx="19.4" cy="20" r="16" stroke="#D8A472"/></svg>
+        </div>
+        <div>
+          <p class="label">From the workshop of</p>
+          <p class="name">Cedarline Woodworks</p>
+        </div>
+      </div>
+
+      <section class="care">
+        <h2>Looking after it</h2>
+        <p>A wipe with a damp cloth, never the dishwasher, and a little food-safe oil when the wood looks dry. Don't overthink it — wood is hardy and resilient, and everything I make is meant to be used.</p>
+      </section>
+
+    </article>
+
+    <footer class="foot">
+      <a href="https://www.ringmark.org/">
+        <svg width="16" height="16" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="20.5" cy="20" r="4"/><circle cx="20" cy="20" r="10"/><circle cx="19.5" cy="20" r="16"/></svg>
+        <span>Tracked with Ringmark</span>
+      </a>
+    </footer>
+  </main>
+</body>
+</html>
