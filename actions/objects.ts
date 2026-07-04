@@ -87,7 +87,7 @@ export async function createObject(
       .eq('id', created.id)
   }
 
-  revalidatePath('/')
+  revalidatePath('/workshop')
   return { id: created.id }
 }
 
@@ -120,7 +120,7 @@ export async function updateObject(
 
   const { data: existing } = await supabase
     .from('wood_objects')
-    .select('id, workshop_id_lower, root_id')
+    .select('id, workshop_id_lower, root_id, public_slug')
     .eq('id', id)
     .eq('account_id', account.id)
     .single()
@@ -216,7 +216,8 @@ export async function updateObject(
   }
 
   revalidatePath(`/objects/${id}`)
-  revalidatePath('/')
+  revalidatePath('/workshop')
+  if (existing.public_slug) revalidatePath(`/p/${existing.public_slug}`)
   return {}
 }
 
@@ -275,7 +276,8 @@ export async function deleteObject(id: string): Promise<{ error?: string }> {
 
   if (error) return { error: error.message }
 
-  revalidatePath('/')
+  revalidatePath('/workshop')
+  if (existing.public_slug) revalidatePath(`/p/${existing.public_slug}`)
   return {}
 }
 
