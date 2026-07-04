@@ -136,10 +136,10 @@ describe('public page lineage rendering', () => {
     )
   })
 
-  it('maps over displaySteps to render the journey timeline', () => {
+  it('maps over steps to render the journey timeline', () => {
     assert.ok(
-      source.includes('displaySteps') && source.includes('.map('),
-      'public page must map over displaySteps to render each journey stage'
+      source.includes('steps.map(') || source.includes('steps.map ('),
+      'public page must map over the chain steps to render each journey stage'
     )
   })
 })

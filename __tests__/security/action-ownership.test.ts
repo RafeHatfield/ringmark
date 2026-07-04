@@ -149,13 +149,14 @@ describe('action ownership — objects.ts', () => {
   })
 
   it('public_slug is never updated (immutable after creation)', () => {
-    // updateObject must not include public_slug in any payload assignment
+    // updateObject may READ public_slug (e.g. to revalidate its public page),
+    // but must never WRITE it into the update payload.
     const fnStart = objectsSrc.indexOf('async function updateObject')
     const fnEnd = objectsSrc.indexOf('async function updateStatus')
     const slice = objectsSrc.slice(fnStart, fnEnd)
     assert.ok(
-      !slice.includes('public_slug'),
-      'updateObject must never modify public_slug — slugs are immutable',
+      !slice.includes('payload.public_slug') && !slice.includes('public_slug:'),
+      'updateObject must never write public_slug into the update payload — slugs are immutable',
     )
   })
 })
