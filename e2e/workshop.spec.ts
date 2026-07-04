@@ -152,8 +152,11 @@ test('home shows root but not child IDs when no search', async ({ page }) => {
 
 test('root card shows piece count', async ({ page }) => {
   await page.goto('/')
-  // 3 nodes in tree (source + child + grandchild) → "3 pieces"
-  await expect(page.getByText(/3 pieces/i)).toBeVisible()
+  // 3 nodes in tree (source + child + grandchild) → "3 pieces". Scope to this
+  // test's own root card by its exact workshop ID — other roots left over
+  // from other test files/runs can otherwise also read "N pieces".
+  const rootCard = page.getByRole('link').filter({ has: page.getByText(sourceWorkshopId, { exact: true }) })
+  await expect(rootCard).toContainText('3 pieces')
 })
 
 test('"View full tree" link appears on root with children', async ({ page }) => {

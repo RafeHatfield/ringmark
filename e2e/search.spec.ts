@@ -47,9 +47,12 @@ test('search by title keyword shows matching objects', async ({ page }) => {
   await expect(page.getByText(sourceWorkshopId)).toBeVisible()
 })
 
-test('search with no query shows Pieces list', async ({ page }) => {
+test('search with no query shows the root list (not search results)', async ({ page }) => {
   await page.goto('/workshop')
-  await expect(page.getByRole('heading', { name: 'Pieces' })).toBeVisible()
+  // The workshop page has no "Pieces" heading — the no-search branch is
+  // distinguished by its sort controls, which only render there.
+  await expect(page.getByText('Sort:', { exact: true })).toBeVisible()
+  await expect(page.getByText(sourceWorkshopId)).toBeVisible()
 })
 
 test('search with no results shows an informative empty state', async ({ page }) => {
