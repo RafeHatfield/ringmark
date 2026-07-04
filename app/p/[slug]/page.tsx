@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { APP_URL, SIGNED_URL_EXPIRY, typeLabel } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
 import { PublicFooter } from '@/components/public-chrome'
+import { signPathsBatch } from '@/lib/signed-urls'
 import { StagePhoto } from './stage-photo'
 
 // Shared leaf-object lookup for generateMetadata + the page body — cache()
@@ -168,15 +169,7 @@ export default async function PublicStoryPage({
 
   // Batch-generate signed URLs for every photo across all steps
   const allPaths = [...photosByStep.values()].flatMap(ps => ps.map(p => p.path))
-  const signedByPath = new Map<string, string>()
-  if (allPaths.length > 0) {
-    const { data: signed } = await admin.storage
-      .from('object-photos')
-      .createSignedUrls(allPaths, SIGNED_URL_EXPIRY)
-    for (const s of (signed ?? [])) {
-      if (s.signedUrl && s.path) signedByPath.set(s.path, s.signedUrl)
-    }
-  }
+  const signedByPath = await signPathsBatch(admin.storage, 'object-photos', allPaths, SIGNED_URL_EXPIRY)
 
   // Annotate each step with its display label and resolved photo array
   const steps = chain.map(step => {

@@ -6,6 +6,7 @@ import { typeLabel, SIGNED_URL_EXPIRY } from '@/lib/constants'
 import { StatusChanger } from '@/components/status-changer'
 import { PhotoSection, type PhotoData } from '@/components/photo-section'
 import { DeleteObjectButton } from '@/components/delete-object-button'
+import { signPathsBatch } from '@/lib/signed-urls'
 
 export default async function ObjectDetailPage({
   params,
@@ -50,11 +51,12 @@ export default async function ObjectDetailPage({
 
   let photos: PhotoData[] = []
   if (rawPhotos && rawPhotos.length > 0) {
-    const { data: signedData } = await supabase.storage
-      .from('object-photos')
-      .createSignedUrls(rawPhotos.map((p) => p.storage_path), SIGNED_URL_EXPIRY)
-
-    const urlMap = new Map(signedData?.map((s) => [s.path, s.signedUrl]) ?? [])
+    const urlMap = await signPathsBatch(
+      supabase.storage,
+      'object-photos',
+      rawPhotos.map((p) => p.storage_path),
+      SIGNED_URL_EXPIRY,
+    )
     photos = rawPhotos.map((p) => ({
       ...p,
       signedUrl: urlMap.get(p.storage_path) ?? null,
