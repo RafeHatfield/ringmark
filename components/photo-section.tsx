@@ -132,23 +132,35 @@ export function PhotoSection({
 
   function handleSaveCaption(photoId: string) {
     startTransition(async () => {
-      await updatePhotoCaption(photoId, captionValue.trim() || null)
+      const result = await updatePhotoCaption(photoId, captionValue.trim() || null)
       setEditingCaption(null)
-      router.refresh()
+      if (result.error) setUploadError(result.error)
+      else {
+        setUploadError('')
+        router.refresh()
+      }
     })
   }
 
   function handleToggleVisibility(photoId: string) {
     startTransition(async () => {
-      await togglePhotoVisibility(photoId)
-      router.refresh()
+      const result = await togglePhotoVisibility(photoId)
+      if (result.error) setUploadError(result.error)
+      else {
+        setUploadError('')
+        router.refresh()
+      }
     })
   }
 
   function handleMove(photoId: string, direction: 'up' | 'down') {
     startTransition(async () => {
-      await movePhoto(photoId, direction)
-      router.refresh()
+      const result = await movePhoto(photoId, direction)
+      if (result.error) setUploadError(result.error)
+      else {
+        setUploadError('')
+        router.refresh()
+      }
     })
   }
 
