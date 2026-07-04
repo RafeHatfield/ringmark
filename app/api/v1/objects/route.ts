@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/service'
 import { CreateObjectSchema } from '@/lib/api-schemas'
 import { suggestRootId } from '@/lib/id-gen'
 import { generateSlug } from '@/lib/slug-gen'
+import { sanitizeSearch } from '@/lib/utils'
 import type { ObjectType, ObjectStatus } from '@/lib/types'
 
 const createSchema = CreateObjectSchema
@@ -34,8 +35,9 @@ export async function GET(request: Request) {
     .range(offset, offset + limit - 1)
 
   if (q) {
+    const safeQ = sanitizeSearch(q)
     query = query.or(
-      `workshop_id.ilike.${q}%,title.ilike.%${q}%,species.ilike.%${q}%,public_title.ilike.%${q}%`
+      `workshop_id.ilike.${safeQ}%,title.ilike.%${safeQ}%,species.ilike.%${safeQ}%,public_title.ilike.%${safeQ}%`
     )
   }
   if (type) query = query.eq('object_type', type as ObjectType)

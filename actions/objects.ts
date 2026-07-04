@@ -6,6 +6,7 @@ import { getOrCreateAccount } from '@/lib/supabase/account'
 import { generateSlug } from '@/lib/slug-gen'
 import type { ObjectType, ObjectStatus, SpeciesConfidence, WoodObjectUpdate } from '@/lib/types'
 import { computeRootId, collectSubtreeIds } from '@/lib/lineage-utils'
+import { sanitizeSearch } from '@/lib/utils'
 
 export type CreateObjectData = {
   workshop_id: string
@@ -304,11 +305,13 @@ export async function searchObjects(
   const supabase = await createClient()
   const account = await getOrCreateAccount()
 
+  const safeQuery = sanitizeSearch(query)
+
   const { data } = await supabase
     .from('wood_objects')
     .select('id, workshop_id, object_type')
     .eq('account_id', account.id)
-    .ilike('workshop_id_lower', `${query.toLowerCase().trim()}%`)
+    .ilike('workshop_id_lower', `${safeQuery.toLowerCase()}%`)
     .order('workshop_id')
     .limit(8)
 

@@ -5,6 +5,7 @@ import { typeLabel } from '@/lib/constants'
 import { SearchInput } from '@/components/search-input'
 import { rollupRoots } from '@/lib/tree-rollup'
 import { RootCard } from '@/components/root-card'
+import { sanitizeSearch } from '@/lib/utils'
 
 const PAGE_SIZE = 50
 
@@ -54,11 +55,12 @@ export default async function WorkshopPage({
   let totalRoots = 0
 
   if (query) {
+    const safeQuery = sanitizeSearch(query)
     const { data } = await supabase
       .from('wood_objects')
       .select('id, workshop_id, object_type, status, title')
       .eq('account_id', account.id)
-      .or(`workshop_id_lower.ilike.%${query.toLowerCase()}%,title.ilike.%${query}%`)
+      .or(`workshop_id_lower.ilike.%${safeQuery.toLowerCase()}%,title.ilike.%${safeQuery}%`)
       .order('updated_at', { ascending: false })
       .limit(50)
     searchObjects = data
