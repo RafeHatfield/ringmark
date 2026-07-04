@@ -99,13 +99,12 @@ export default async function PublicStoryPage({
     return <NotFound message="This piece's story hasn't been published yet." />
   }
 
-  // Build lineage chain root → leaf by walking parent_id.
-  // We query each ancestor individually so the walk terminates naturally at
-  // the root (parent_id = null) without needing a recursive CTE.
+  // Build lineage chain root → leaf: one query fetches the whole tree by
+  // root_id, then an in-memory walk from the leaf back to the root via
+  // parent_id assembles the chain without a recursive CTE.
   type ChainStep = {
     id: string
     parent_id: string | null
-    workshop_id: string
     object_type: string
     title: string | null
     public_story: string | null
@@ -197,7 +196,6 @@ export default async function PublicStoryPage({
   // The hero image above already shows the finished piece, so the reader sees
   // the end result first, then follows the story that led to it.
   const finalStep = steps[steps.length - 1]
-  const displaySteps = steps
   const hasLineage = steps.length > 1
 
   const workshopName = getWorkshopName(accountData)
@@ -300,9 +298,9 @@ export default async function PublicStoryPage({
                 </div>
 
                 <div>
-                  {displaySteps.map((step, i) => {
+                  {steps.map((step, i) => {
                     const isFirst = i === 0                        // source (oldest)
-                    const isLast = i === displaySteps.length - 1  // finished piece (newest)
+                    const isLast = i === steps.length - 1          // finished piece (newest)
                     const isBookend = isFirst || isLast
 
                     return (

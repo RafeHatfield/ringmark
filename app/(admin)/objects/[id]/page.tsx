@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { createClient } from '@/lib/supabase/server'
-import { typeLabel } from '@/lib/constants'
+import { typeLabel, SIGNED_URL_EXPIRY } from '@/lib/constants'
 import { StatusChanger } from '@/components/status-changer'
 import { PhotoSection, type PhotoData } from '@/components/photo-section'
 import { DeleteObjectButton } from '@/components/delete-object-button'
@@ -37,6 +37,7 @@ export default async function ObjectDetailPage({
       .from('wood_objects')
       .select('id, workshop_id, object_type, status')
       .eq('parent_id', id)
+      .eq('account_id', account.id)
       .order('workshop_id'),
     // Fetch photos with signed URLs (1h expiry)
     supabase
@@ -51,7 +52,7 @@ export default async function ObjectDetailPage({
   if (rawPhotos && rawPhotos.length > 0) {
     const { data: signedData } = await supabase.storage
       .from('object-photos')
-      .createSignedUrls(rawPhotos.map((p) => p.storage_path), 3600)
+      .createSignedUrls(rawPhotos.map((p) => p.storage_path), SIGNED_URL_EXPIRY)
 
     const urlMap = new Map(signedData?.map((s) => [s.path, s.signedUrl]) ?? [])
     photos = rawPhotos.map((p) => ({
@@ -73,7 +74,7 @@ export default async function ObjectDetailPage({
     <main className="max-w-2xl mx-auto px-4 pt-4 pb-16">
       {/* Nav */}
       <div className="flex items-center justify-between mb-5">
-        <Link href="/" className="text-sm text-bark hover:text-ink">
+        <Link href="/workshop" className="text-sm text-bark hover:text-ink">
           ← Back
         </Link>
         <Link
