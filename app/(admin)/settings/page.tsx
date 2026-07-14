@@ -72,7 +72,7 @@ export default async function SettingsPage({
             <div key={m.userId} className="px-4 py-3">
               <p className="text-sm">{m.email}</p>
               <p className="text-xs text-bark mt-0.5">
-                Joined {new Date(m.joinedAt).toLocaleDateString()}
+                Joined {new Date(m.joinedAt).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })}
               </p>
             </div>
           ))}
@@ -96,7 +96,7 @@ export default async function SettingsPage({
               <div key={inv.id} className="px-4 py-3">
                 <p className="font-mono text-xs break-all">{appUrl}/invite/{inv.id}</p>
                 <p className="text-xs text-bark mt-0.5">
-                  Expires {new Date(inv.expires_at).toLocaleDateString()}
+                  Expires {new Date(inv.expires_at).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })}
                 </p>
               </div>
             ))}
