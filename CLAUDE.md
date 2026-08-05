@@ -107,6 +107,10 @@ Supabase Auth is the authorization server; Ringmark is the resource server.
 
 DCR is enabled because claude.ai's connector flow requires it — which means **any client can self-register and choose its own display name**. The consent screen is the only human gate, so it leads with the redirect URI host (the one value an attacker can't freely pick) and never renders the client's remote logo.
 
+**Supabase does not implement RFC 8707.** Verified 2026-08-05 with a full authorization-code + PKCE flow: the `resource` parameter is accepted and ignored, and tokens come back with `aud: "authenticated"`. Audience binding therefore depends on the Custom Access Token Hook (`supabase/migrations/20260805000001_oauth_audience_hook.sql`), which rewrites `aud` for OAuth-issued tokens only — it keys off the `client_id` claim, because rewriting `aud` on ordinary web sessions would break supabase-js and PostgREST.
+
+Creating the function does nothing on its own; it must also be registered under **Authentication → Hooks → Customize Access Token (JWT) Claims**. `node --env-file=.env.local scripts/verify-oauth-flow.mjs` runs the whole flow end to end and tells you which half is missing. Without the hook, `lib/api-auth.ts` rejects every OAuth token — fail-closed by design.
+
 ### Key Directories
 ```
 app/                        Next.js App Router routes
