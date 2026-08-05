@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@radix-ui/react-label": "^2.1",
     "@radix-ui/react-slot": "^1.1",
     "@sentry/nextjs": "^10.58.0",
@@ -33,6 +34,7 @@
     "class-variance-authority": "^0.7",
     "clsx": "^2",
     "lucide-react": "^0.460",
+    "mcp-handler": "^2.1.0",
     "next": "^15",
     "qrcode": "^1.5.4",
     "react": "^19",

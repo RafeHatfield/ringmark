@@ -18,8 +18,7 @@
  *
  * Set RINGMARK_API_URL to override the default http://localhost:3000.
  */
-
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import fs from 'fs'
 import path from 'path'
 import { createServer } from './server.js'

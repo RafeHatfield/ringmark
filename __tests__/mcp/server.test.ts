@@ -15,8 +15,7 @@ import assert from 'node:assert/strict'
 import { writeFileSync, unlinkSync, chmodSync } from 'fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { createServer } from '../../mcp/server.js'
 
 const TEST_KEY = 'test-api-key'
