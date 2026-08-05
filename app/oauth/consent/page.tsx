@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { getOrCreateAccount } from '@/lib/supabase/account'
 import { ConsentForm } from './consent-form'
 
 /**
@@ -56,6 +57,15 @@ export default async function ConsentPage({
       </Shell>
     )
   }
+
+  // Accounts are created lazily, and until now that only ever happened on an
+  // admin page. This flow never touches one: the authorize endpoint sends the
+  // user to /login?next=/oauth/consent, and login redirects straight back here.
+  // A user whose first authenticated action is granting OAuth access would end
+  // up with a valid token and no account, and every MCP call would 401 with
+  // nothing to explain why. Granting an app access to "your workshop" should
+  // mean the workshop exists.
+  await getOrCreateAccount()
 
   const supabase = await createClient()
   const { data, error } = await supabase.auth.oauth.getAuthorizationDetails(authorizationId)
