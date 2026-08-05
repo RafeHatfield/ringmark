@@ -35,6 +35,17 @@ JWKS. The token must be audience-bound to this resource server (RFC 8707); a
 token minted for a different resource is rejected even with a valid signature.
 The account is resolved from the token subject via `account_members`.
 
+> **Audience binding needs a Postgres hook.** Supabase Auth does not implement
+> RFC 8707 — the `resource` parameter is accepted and ignored, and tokens are
+> issued with `aud: "authenticated"`. The Custom Access Token Hook in
+> `supabase/migrations/20260805000001_oauth_audience_hook.sql` rewrites `aud`
+> for OAuth-issued tokens only. It must be registered under **Authentication →
+> Hooks**; the migration alone does nothing. Until it is, every OAuth token is
+> rejected — deliberately, since an unbound token is exactly what RFC 8707
+> exists to prevent.
+>
+> Verify with `node --env-file=.env.local scripts/verify-oauth-flow.mjs`.
+
 > There is deliberately no shared-secret fallback. An earlier version accepted a
 > single `RINGMARK_API_KEY` from the environment and resolved it to "the oldest
 > account in the database", which leaks one tenant's data to anyone holding the
