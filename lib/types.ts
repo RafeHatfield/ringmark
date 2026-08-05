@@ -115,6 +115,9 @@ export type ObjectPhoto = {
   captured_at: string | null
   created_at: string
   updated_at: string
+  /** Set when the photo is soft-deleted. Null means live. */
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 export type ObjectPhotoInsert = {
@@ -128,6 +131,8 @@ export type ObjectPhotoInsert = {
   captured_at?: string | null
   created_at?: string
   updated_at?: string
+  deleted_at?: string | null
+  deleted_by?: string | null
 }
 
 export type ObjectPhotoUpdate = Partial<ObjectPhotoInsert>

@@ -27,6 +27,7 @@ export async function PATCH(
     .eq('id', photoId)
     .eq('object_id', object.id)
     .eq('account_id', account.id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (!photo) {
@@ -66,6 +67,14 @@ export async function PATCH(
 }
 
 // ── DELETE /api/v1/objects/:id/photos/:photoId ────────────────────────────────
+//
+// Soft delete. The storage file is retained so the delete stays reversible via
+// POST .../restore. The bucket is private and every read mints a signed URL on
+// demand, so a soft-deleted photo becomes unreachable the moment it drops out
+// of the read paths — no file removal needed to make it disappear.
+//
+// Hard deletion of photo files happens only via DELETE /api/v1/objects/:id,
+// which sweeps storage for the whole object.
 
 export async function DELETE(
   request: Request,
@@ -82,31 +91,24 @@ export async function DELETE(
     return Response.json({ error: 'Object not found' }, { status: 404 })
   }
 
-  // Fetch the photo, confirming it belongs to this object and account
+  // Fetch the photo, confirming it belongs to this object and account and
+  // isn't already deleted
   const { data: photo } = await db
     .from('object_photos')
-    .select('id, storage_path')
+    .select('id')
     .eq('id', photoId)
     .eq('object_id', object.id)
     .eq('account_id', account.id)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (!photo) {
     return Response.json({ error: 'Photo not found' }, { status: 404 })
   }
 
-  // Remove from storage (best-effort — log but don't block on failure)
-  const { error: storageError } = await db.storage
-    .from(BUCKET)
-    .remove([photo.storage_path])
-  if (storageError) {
-    console.error('[delete photo] storage remove failed:', storageError.message)
-  }
-
-  // Delete the DB record
   const { error: deleteError } = await db
     .from('object_photos')
-    .delete()
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', photo.id)
     .eq('account_id', account.id)
 

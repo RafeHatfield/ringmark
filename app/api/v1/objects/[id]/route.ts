@@ -169,7 +169,10 @@ export async function DELETE(
     )
   }
 
-  // Remove photo storage files (best-effort — DB records cascade automatically)
+  // Remove photo storage files (best-effort — DB records cascade automatically).
+  // Deliberately NOT filtered by deleted_at: object deletion is the hard path,
+  // so soft-deleted photos must have their storage files swept too or they
+  // orphan permanently.
   const { data: photos } = await db
     .from('object_photos')
     .select('storage_path')

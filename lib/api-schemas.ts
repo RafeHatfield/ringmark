@@ -194,6 +194,11 @@ export const PhotoSchema = z
       description: 'Signed storage URL valid for 1 hour. Null if the URL could not be generated.',
     }),
     created_at: z.string().datetime().nullable(),
+    deleted_at: z.string().datetime().nullable().optional().openapi({
+      description:
+        'Set when the photo has been soft-deleted. Null on live photos. Only ever non-null ' +
+        'in list responses requested with ?include_deleted=true.',
+    }),
   })
   .openapi('Photo')
 

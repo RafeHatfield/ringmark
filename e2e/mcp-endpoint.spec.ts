@@ -126,6 +126,47 @@ test('tools/list returns ringmark tools including delete_object and update_photo
   // Tools added in recent bug-fix sessions
   expect(names).toContain('delete_object')
   expect(names).toContain('update_photo')
+  // Soft-delete companion — a delete tool without a restore tool is just a
+  // slower delete
+  expect(names).toContain('restore_photo')
+})
+
+// ── Remote destructive-tool guards ───────────────────────────────────────────
+//
+// This endpoint is on the public internet. delete_object must not be able to
+// take a live public page down, and the API's existing guards only hold if
+// `force` is unreachable from here.
+
+test('remote delete_object exposes no force parameter', async ({ request }) => {
+  const r = await request.post(MCP_URL, {
+    headers: mcpHeaders(VALID_KEY),
+    data: rpc('tools/list'),
+  })
+  const body = await r.json()
+  const del = body.result.tools.find((t: { name: string }) => t.name === 'delete_object')
+  expect(del, 'delete_object should be registered').toBeTruthy()
+  const props = del.inputSchema?.properties ?? {}
+  expect(Object.keys(props)).toContain('id')
+  expect(Object.keys(props)).not.toContain('force')
+})
+
+test('read-only tools carry readOnlyHint, delete tools carry destructiveHint', async ({ request }) => {
+  const r = await request.post(MCP_URL, {
+    headers: mcpHeaders(VALID_KEY),
+    data: rpc('tools/list'),
+  })
+  const body = await r.json()
+  const byName = new Map<string, { annotations?: Record<string, boolean> }>(
+    body.result.tools.map((t: { name: string }) => [t.name, t])
+  )
+
+  for (const name of ['list_objects', 'search_objects', 'get_object', 'get_lineage', 'list_photos']) {
+    expect(byName.get(name)?.annotations?.readOnlyHint, `${name}`).toBe(true)
+  }
+  for (const name of ['delete_object', 'delete_photo']) {
+    expect(byName.get(name)?.annotations?.destructiveHint, `${name}`).toBe(true)
+    expect(byName.get(name)?.annotations?.readOnlyHint, `${name}`).not.toBe(true)
+  }
 })
 
 test('unknown method returns -32601 method not found', async ({ request }) => {

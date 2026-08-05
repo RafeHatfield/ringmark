@@ -260,9 +260,19 @@ function buildRegistry(): OpenAPIRegistry {
     path: '/api/v1/objects/{id}/photos',
     tags: ['Photos'],
     summary: 'List photos for an object',
-    description: 'Returns all photos attached to the object with signed URLs (valid 1 hour), ordered by sort_order.',
+    description:
+      'Returns the live photos attached to the object with signed URLs (valid 1 hour), ordered by sort_order. ' +
+      'Soft-deleted photos are excluded unless include_deleted=true.',
     security,
-    request: { params: z.object({ id: idParam.schema }) },
+    request: {
+      params: z.object({ id: idParam.schema }),
+      query: z.object({
+        include_deleted: z.coerce.boolean().optional().openapi({
+          description: 'Include soft-deleted photos in the response. Their deleted_at will be non-null.',
+          example: true,
+        }),
+      }),
+    },
     responses: {
       200: {
         description: 'Photos list',
@@ -354,7 +364,11 @@ function buildRegistry(): OpenAPIRegistry {
     path: '/api/v1/objects/{id}/photos/{photoId}',
     tags: ['Photos'],
     summary: 'Delete a photo',
-    description: 'Removes the photo from storage and deletes the DB record. Storage removal is best-effort (DB record is always deleted).',
+    description:
+      'Soft-deletes the photo. It drops out of every read path — including the public story page ' +
+      'and the OG share card — but the image file is retained so the delete can be reversed with ' +
+      'POST /api/v1/objects/{id}/photos/{photoId}/restore. Photo files are only removed outright ' +
+      'when the whole object is deleted.',
     security,
     request: {
       params: z.object({
@@ -363,7 +377,32 @@ function buildRegistry(): OpenAPIRegistry {
       }),
     },
     responses: {
-      204: { description: 'Deleted — no content' },
+      204: { description: 'Soft-deleted — no content' },
+      ...errorResponses,
+    },
+  })
+
+  // ── POST /api/v1/objects/:id/photos/:photoId/restore ───────────────────────
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/objects/{id}/photos/{photoId}/restore',
+    tags: ['Photos'],
+    summary: 'Restore a soft-deleted photo',
+    description:
+      'Reverses a soft delete, returning the photo to its original sort position. ' +
+      'Returns 404 if the photo does not exist or is not currently deleted.',
+    security,
+    request: {
+      params: z.object({
+        id: idParam.schema,
+        photoId: z.string().uuid().openapi({ description: 'Photo UUID' }),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Restored photo record with a 1-hour signed URL',
+        content: { 'application/json': { schema: PhotoSchema } },
+      },
       ...errorResponses,
     },
   })

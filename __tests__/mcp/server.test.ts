@@ -25,15 +25,18 @@ const TEST_BASE = 'http://test.local/api/v1'
 const EXPECTED_TOOLS = [
   'add_child',
   'create_object',
+  'delete_object',
   'delete_photo',
   'get_lineage',
   'get_object',
   'list_objects',
   'list_photos',
   'publish_object',
+  'restore_photo',
   'save_story',
   'search_objects',
   'update_object',
+  'update_photo',
   'upload_photo',
 ].sort()
 
@@ -41,8 +44,16 @@ const EXPECTED_TOOLS = [
 
 type Pair = { client: Client; cleanup: () => Promise<void> }
 
-async function connectPair(timeoutMs = 30_000): Promise<Pair> {
-  const server = createServer(TEST_KEY, TEST_BASE, timeoutMs)
+/**
+ * Default options match the REMOTE server (app/api/mcp/route.ts): no
+ * allowForceDelete. Pass { allowForceDelete: true } to get the local stdio
+ * shape.
+ */
+async function connectPair(
+  timeoutMs = 30_000,
+  options: { hosted?: boolean; allowForceDelete?: boolean } = {},
+): Promise<Pair> {
+  const server = createServer(TEST_KEY, TEST_BASE, timeoutMs, options)
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'test-client', version: '1.0.0' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -62,7 +73,7 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ringmark MCP server — manifest', () => {
-  it('tools/list returns all 12 expected tools', async () => {
+  it('tools/list returns all 15 expected tools', async () => {
     const { client, cleanup } = await connectPair()
     try {
       const { tools } = await client.listTools()
@@ -109,6 +120,143 @@ describe('ringmark MCP server — manifest', () => {
       const props = (getObj.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}
       assert.ok('id' in props, 'get_object must declare an id parameter')
     } finally {
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — tool annotations', () => {
+  const READ_ONLY = ['list_objects', 'search_objects', 'get_object', 'get_lineage', 'list_photos']
+  const IDEMPOTENT = ['update_object', 'update_photo', 'save_story', 'restore_photo', 'publish_object']
+  const DESTRUCTIVE = ['delete_object', 'delete_photo']
+
+  it('read-only tools are annotated readOnlyHint', async () => {
+    const { client, cleanup } = await connectPair()
+    try {
+      const { tools } = await client.listTools()
+      for (const name of READ_ONLY) {
+        const tool = tools.find(t => t.name === name)
+        assert.ok(tool, `${name} not found`)
+        assert.equal(tool.annotations?.readOnlyHint, true, `${name} should be readOnlyHint`)
+      }
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('mutating tools are NOT annotated readOnlyHint', async () => {
+    const { client, cleanup } = await connectPair()
+    try {
+      const { tools } = await client.listTools()
+      for (const name of [...IDEMPOTENT, ...DESTRUCTIVE, 'create_object', 'add_child', 'upload_photo']) {
+        const tool = tools.find(t => t.name === name)
+        assert.ok(tool, `${name} not found`)
+        assert.notEqual(
+          tool.annotations?.readOnlyHint, true,
+          `${name} mutates state and must not claim readOnlyHint`
+        )
+      }
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('idempotent tools are annotated idempotentHint', async () => {
+    const { client, cleanup } = await connectPair()
+    try {
+      const { tools } = await client.listTools()
+      for (const name of IDEMPOTENT) {
+        const tool = tools.find(t => t.name === name)
+        assert.ok(tool, `${name} not found`)
+        assert.equal(tool.annotations?.idempotentHint, true, `${name} should be idempotentHint`)
+      }
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('delete tools are annotated destructiveHint', async () => {
+    const { client, cleanup } = await connectPair()
+    try {
+      const { tools } = await client.listTools()
+      for (const name of DESTRUCTIVE) {
+        const tool = tools.find(t => t.name === name)
+        assert.ok(tool, `${name} not found`)
+        assert.equal(tool.annotations?.destructiveHint, true, `${name} should be destructiveHint`)
+      }
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('only upload_photo reaches outside Ringmark (openWorldHint)', async () => {
+    const { client, cleanup } = await connectPair()
+    try {
+      const { tools } = await client.listTools()
+      for (const tool of tools) {
+        const expected = tool.name === 'upload_photo'
+        assert.equal(
+          tool.annotations?.openWorldHint, expected,
+          `${tool.name} openWorldHint should be ${expected}`
+        )
+      }
+    } finally {
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — delete_object force gating', () => {
+  it('remote shape (default) exposes no force parameter', async () => {
+    const { client, cleanup } = await connectPair()
+    try {
+      const { tools } = await client.listTools()
+      const del = tools.find(t => t.name === 'delete_object')
+      assert.ok(del, 'delete_object not found')
+      const props = (del.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}
+      assert.ok(!('force' in props), 'remote delete_object must not expose force')
+      assert.ok('id' in props, 'delete_object must still take an id')
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it('remote shape never sends ?force=true, even if force is passed anyway', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return new Response(null, { status: 204 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      // An unknown extra arg must not become a force delete
+      await client.callTool({ name: 'delete_object', arguments: { id: 'RH4', force: true } })
+      assert.ok(!capturedUrl.includes('force'), `remote delete must not force, got: ${capturedUrl}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('local shape exposes force and sends ?force=true when set', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return new Response(null, { status: 204 })
+    }
+    const { client, cleanup } = await connectPair(30_000, { allowForceDelete: true })
+    try {
+      const { tools } = await client.listTools()
+      const del = tools.find(t => t.name === 'delete_object')
+      const props = (del?.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}
+      assert.ok('force' in props, 'local delete_object should expose force')
+
+      await client.callTool({ name: 'delete_object', arguments: { id: 'RH4', force: true } })
+      assert.ok(capturedUrl.includes('force=true'), `expected force=true, got: ${capturedUrl}`)
+    } finally {
+      global.fetch = original
       await cleanup()
     }
   })
@@ -301,6 +449,123 @@ describe('ringmark MCP server — list_photos + delete_photo', () => {
       })
       assert.ok(result.isError, 'expected isError: true for a 404 photo')
       assert.ok(textOf(result).includes('Photo not found'), `expected error message, got: ${textOf(result)}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('delete_photo tells the caller the delete is reversible', async () => {
+    const original = global.fetch
+    global.fetch = async () => new Response(null, { status: 204 })
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'delete_photo',
+        arguments: { object_id: 'RH4', photo_id: 'photo-aaa' },
+      })
+      assert.ok(
+        textOf(result).includes('restore_photo'),
+        `delete confirmation should point at restore_photo, got: ${textOf(result)}`
+      )
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — soft delete and restore', () => {
+  it('list_photos omits include_deleted from the query by default', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return Response.json({ data: [], total: 0 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      await client.callTool({ name: 'list_photos', arguments: { object_id: 'RH4' } })
+      assert.ok(!capturedUrl.includes('include_deleted'), `unexpected query: ${capturedUrl}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('list_photos passes include_deleted through and marks deleted rows', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return Response.json({
+        data: [
+          { id: 'photo-live', caption: 'Keeper', is_public: true, sort_order: 0, signed_url: null, deleted_at: null },
+          { id: 'photo-gone', caption: 'Blurry', is_public: true, sort_order: 1, signed_url: null, deleted_at: '2026-08-04T10:00:00Z' },
+        ],
+        total: 2,
+      })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'list_photos',
+        arguments: { object_id: 'RH4', include_deleted: true },
+      })
+      assert.ok(capturedUrl.includes('include_deleted=true'), `expected query param, got: ${capturedUrl}`)
+      const text = textOf(result)
+      assert.ok(text.includes('photo-gone'), `expected deleted photo listed, got: ${text}`)
+      assert.match(text, /photo-gone.*\[deleted\]/, `deleted photo should be marked, got: ${text}`)
+      assert.ok(!/photo-live.*\[deleted\]/.test(text), `live photo must not be marked deleted, got: ${text}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('restore_photo POSTs to the restore endpoint and confirms the position', async () => {
+    let capturedUrl = ''
+    let capturedMethod = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedMethod = init?.method ?? ''
+      return Response.json({ id: 'photo-gone', sort_order: 1 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'restore_photo',
+        arguments: { object_id: 'RH4', photo_id: 'photo-gone' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.equal(capturedMethod, 'POST')
+      assert.ok(
+        capturedUrl.includes('/objects/RH4/photos/photo-gone/restore'),
+        `wrong URL: ${capturedUrl}`
+      )
+      assert.ok(textOf(result).includes('restored'), `expected restore confirmation, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('restore_photo surfaces a 404 when the photo is not deleted', async () => {
+    const restore = mockFetch(
+      Response.json({ error: 'No deleted photo with that ID on this object' }, { status: 404 })
+    )
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'restore_photo',
+        arguments: { object_id: 'RH4', photo_id: 'photo-live' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a non-deleted photo')
+      assert.ok(
+        textOf(result).includes('No deleted photo'),
+        `expected not-deleted error, got: ${textOf(result)}`
+      )
     } finally {
       restore()
       await cleanup()

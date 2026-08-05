@@ -9,6 +9,12 @@
  *   Generate a key at Settings → API Keys. The same key authenticates both
  *   this endpoint and the underlying REST API calls it makes.
  *
+ * Tool surface: same tools as the local stdio server, with one difference —
+ *   createServer() is built without allowForceDelete, so delete_object has no
+ *   `force` parameter here. Combined with the API's existing guards, the only
+ *   object this endpoint can delete is an unpublished leaf. delete_photo is a
+ *   soft delete and is reversible via restore_photo.
+ *
  * Migration from MCP_SECRET:
  *   The previous MCP_SECRET env var is no longer used. Generate a new API key
  *   from Settings → API Keys and update your claude.ai integration to use it.
@@ -32,7 +38,7 @@ import { authenticateApiRequest } from '@/lib/api-auth'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const SERVER_INFO = { name: 'ringmark', version: '0.3.0' } as const
+const SERVER_INFO = { name: 'ringmark', version: '0.4.0' } as const
 
 function jsonRpcOk(id: unknown, result: unknown): Response {
   return Response.json({ jsonrpc: '2.0', id, result })

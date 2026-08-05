@@ -46,6 +46,7 @@ export default async function ObjectDetailPage({
       .select('id, storage_path, caption, is_public, sort_order')
       .eq('object_id', id)
       .eq('account_id', account.id)
+      .is('deleted_at', null)
       .order('sort_order'),
   ])
 

@@ -21,12 +21,20 @@ export async function GET(
     return Response.json({ error: 'Object not found' }, { status: 404 })
   }
 
-  const { data: photos, error } = await db
+  // Soft-deleted photos are hidden unless explicitly requested, so the default
+  // response matches what's actually live on the object.
+  const includeDeleted =
+    new URL(request.url).searchParams.get('include_deleted') === 'true'
+
+  let query = db
     .from('object_photos')
-    .select('id, caption, is_public, sort_order, storage_path, created_at')
+    .select('id, caption, is_public, sort_order, storage_path, created_at, deleted_at')
     .eq('object_id', object.id)
     .eq('account_id', account.id)
-    .order('sort_order', { ascending: true })
+
+  if (!includeDeleted) query = query.is('deleted_at', null)
+
+  const { data: photos, error } = await query.order('sort_order', { ascending: true })
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 })
@@ -52,6 +60,7 @@ export async function GET(
     sort_order: p.sort_order,
     signed_url: signedByPath.get(p.storage_path) ?? null,
     created_at: p.created_at,
+    deleted_at: p.deleted_at,
   }))
 
   return Response.json({ data, total: data.length })
