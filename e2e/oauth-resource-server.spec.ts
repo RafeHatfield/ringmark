@@ -18,6 +18,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { TEST_EMAIL, TEST_PASSWORD } from './helpers/supabase-admin'
 
 const BASE = 'http://localhost:3000'
 const PRM_PATH = '/.well-known/oauth-protected-resource'
@@ -92,10 +93,16 @@ test('consent screen is auth-gated and preserves authorization_id through login'
   expect(next).toBe('/oauth/consent?authorization_id=test-authz-123')
 })
 
-test('consent screen without an authorization_id does not error', async ({ browser }) => {
-  const ctx = await browser.newContext({ storageState: 'e2e/.auth/user.json' })
-  const page = await ctx.newPage()
+test('consent screen without an authorization_id does not error', async ({ page }) => {
+  // Signs in inline rather than reusing the shared storageState: other specs in
+  // this suite revoke that session, and this test only needs to be authenticated
+  // enough to get past middleware.
+  await page.goto('/login')
+  await page.fill('#email', TEST_EMAIL)
+  await page.fill('#password', TEST_PASSWORD)
+  await page.click('button[type="submit"]')
+  await page.waitForURL('/workshop')
+
   await page.goto(`${BASE}/oauth/consent`)
   await expect(page.getByText('Nothing to approve')).toBeVisible()
-  await ctx.close()
 })

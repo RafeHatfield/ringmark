@@ -14,13 +14,34 @@ The REST API provides programmatic access to Ringmark workshop data. It is desig
 
 ## Authentication
 
-All object endpoints require a Bearer token in the `Authorization` header:
+All object endpoints require a Bearer token in the `Authorization` header. Two
+credential types are accepted, distinguished by shape — a JWT is routed to OAuth
+verification, anything else is treated as an opaque API key.
+
+**1. Account API key** — for scripts, CI, and the local stdio MCP server.
 
 ```bash
 Authorization: Bearer $RINGMARK_API_KEY
 ```
 
-Set `RINGMARK_API_KEY` in your environment (`.env.local` for dev, Vercel environment variables for production). The server performs a timing-safe comparison — missing or invalid keys return `401`.
+Generate one at **Settings → API Keys**. Only a SHA-256 hash is stored, so the
+raw key is shown once at creation and never again. Keys are scoped to the
+account that owns them; revoking one takes effect immediately.
+
+**2. OAuth 2.1 access token** — for claude.ai and other MCP clients.
+
+Issued by Supabase Auth's OAuth server and verified here against the project
+JWKS. The token must be audience-bound to this resource server (RFC 8707); a
+token minted for a different resource is rejected even with a valid signature.
+The account is resolved from the token subject via `account_members`.
+
+> There is deliberately no shared-secret fallback. An earlier version accepted a
+> single `RINGMARK_API_KEY` from the environment and resolved it to "the oldest
+> account in the database", which leaks one tenant's data to anyone holding the
+> secret once more than one account exists. That key is now an ordinary row in
+> `api_keys`.
+
+Missing or invalid credentials return `401`.
 
 The OpenAPI spec (`/api/v1/openapi.json`) and Swagger UI (`/api/v1/docs`) do not require authentication.
 
@@ -170,9 +191,23 @@ curl -X PATCH http://localhost:3000/api/v1/objects/RH1 \
 
 ### DELETE /api/v1/objects/:id
 
-Permanently delete an object. Children are cascade-deleted by the database.
+Permanently delete an object and remove its photo files from storage — including
+any photos that were previously soft-deleted, so nothing is left orphaned. This
+is the only irreversible delete in the API.
 
 **Path parameter:** `id` — UUID or workshop ID
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `force` | `true` | Required to delete a **published** object, taking its live public page down |
+
+**Guards:**
+
+- **Published objects** return `409` unless `?force=true`.
+- **Objects with children** return `409` always — `force` does not override this.
+  Delete or re-parent the children first.
 
 **Response (204):** No content.
 
@@ -180,6 +215,69 @@ Permanently delete an object. Children are cascade-deleted by the database.
 
 ```bash
 curl -X DELETE http://localhost:3000/api/v1/objects/RH7 \
+  -H "Authorization: Bearer $RINGMARK_API_KEY"
+```
+
+---
+
+### GET /api/v1/objects/:id/photos
+
+List photos attached to an object, each with a signed URL valid for one hour.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `include_deleted` | `true` | Include soft-deleted photos; their `deleted_at` will be non-null |
+
+Soft-deleted photos are excluded by default, so the response matches what is
+actually live on the object.
+
+---
+
+### POST /api/v1/objects/:id/photos
+
+Upload a photo via `multipart/form-data` (JPEG, PNG, WebP, or HEIC). Fields:
+`file` (required) and `caption` (optional).
+
+**Response (201):** Photo record with a one-hour signed URL.
+
+---
+
+### PATCH /api/v1/objects/:id/photos/:photoId
+
+Update a photo's caption. Does not touch the image file or sort order. Pass an
+empty string to clear.
+
+---
+
+### DELETE /api/v1/objects/:id/photos/:photoId
+
+**Soft delete.** The photo drops out of every read path immediately — including
+the public story page and the OG share card — but the image file is retained so
+the delete can be reversed.
+
+The `object-photos` bucket is private and every public read mints a signed URL
+on demand, so removing the photo from the read paths is what makes it
+unreachable; no file deletion is required for that.
+
+**Response (204):** No content. Deleting an already-deleted photo returns `404`.
+
+---
+
+### POST /api/v1/objects/:id/photos/:photoId/restore
+
+Reverse a soft delete, returning the photo to its original sort position.
+`sort_order` is never reclaimed while a photo is deleted, so a restore cannot
+collide with a photo uploaded in the meantime.
+
+**Response (200):** Restored photo record with a fresh signed URL.
+Returns `404` if the photo does not exist or is not currently deleted.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/objects/RH1/photos/$PHOTO_ID/restore \
   -H "Authorization: Bearer $RINGMARK_API_KEY"
 ```
 
@@ -271,3 +369,67 @@ Full object shape returned by GET (single), POST, and PATCH responses:
 - **OpenAPI 3.1 spec:** `GET /api/v1/openapi.json` — machine-readable spec for code generation or import into tools like Postman (no auth required)
 
 The Swagger UI is generated from the same Zod schemas that validate requests (`lib/api-schemas.ts`), so the docs are always in sync with actual validation.
+
+---
+
+## Remote MCP endpoint
+
+`POST /api/mcp` exposes the same data as a Model Context Protocol server over
+Streamable HTTP, for claude.ai custom connectors and any standard MCP client.
+Tool handlers proxy the REST endpoints documented above, so authorization lives
+in exactly one place.
+
+**Transport.** Clients must send `Accept: application/json, text/event-stream`.
+Anything else returns `406` — this is a requirement of the Streamable HTTP
+spec, not a Ringmark choice. Successful responses are SSE-framed.
+
+**Discovery.** An unauthenticated request returns `401` with an RFC 9728
+challenge naming the metadata document:
+
+```
+WWW-Authenticate: Bearer realm="ringmark", error="invalid_token",
+                  resource_metadata="https://ringmark.org/.well-known/oauth-protected-resource"
+```
+
+```bash
+curl -s https://ringmark.org/.well-known/oauth-protected-resource | jq
+```
+
+**Tool surface.** Identical to the local stdio server with one deliberate
+difference: `delete_object` is registered without its `force` parameter. Combined
+with the API's existing guards (published objects and objects with children are
+both blocked), the only object this endpoint can delete is an unpublished leaf.
+`delete_photo` is a soft delete, reversible with `restore_photo`.
+
+`mcp/server.ts` is the single definition of the tool surface, shared by both
+transports. `__tests__/mcp/contract-drift.test.ts` asserts every endpoint the
+tools call still exists in the OpenAPI spec.
+
+---
+
+## Rate limiting
+
+Rate limiting for `/api/mcp` and `/api/v1/*` is configured as **Vercel WAF
+rules**, not in this repository — there is no code to read, so it is documented
+here instead.
+
+Configure under **Vercel → Project → Firewall → Rate Limiting**:
+
+| Rule | Path | Limit | Action |
+| --- | --- | --- | --- |
+| MCP endpoint | `/api/mcp` | 60 req/min per IP | Deny (429) |
+| REST API | `/api/v1/*` | 120 req/min per IP | Deny (429) |
+| Metadata | `/.well-known/*` | 30 req/min per IP | Deny (429) |
+
+Notes:
+
+- These are **per-IP**, not per-token. An IP limit is the right tool against
+  scraping and brute-force; it does not give a single tenant a fair-use quota.
+  Per-token quotas need shared state (Upstash or similar) and are deliberately
+  out of scope until there are enough users for it to matter.
+- Keep `/.well-known/*` generous enough for discovery retries — throttling it
+  breaks the OAuth flow before it starts, and the endpoint is cheap and public
+  by design.
+- Set limits well above the burst an MCP client produces during a normal
+  session; a single inventory conversation can fire a dozen tool calls in a few
+  seconds.
