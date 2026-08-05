@@ -29,14 +29,40 @@ function adminClient() {
   })
 }
 
+/**
+ * True if the account can currently sign in with this password.
+ *
+ * Uses the anon client and a local sign-out, so it creates a throwaway session
+ * without disturbing any other.
+ */
+async function passwordWorks(email: string, password: string): Promise<boolean> {
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!anonKey) return false
+  const probe = createClient(supabaseBaseUrl(), anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+  const { error } = await probe.auth.signInWithPassword({ email, password })
+  if (!error) await probe.auth.signOut({ scope: 'local' })
+  return !error
+}
+
 export async function ensureTestUser(): Promise<string> {
   const client = adminClient()
   const { data: { users } } = await client.auth.admin.listUsers()
   const existing = users.find(u => u.email === TEST_EMAIL)
 
   if (existing) {
-    // Ensure the password is correct (re-set it so we always have the known password)
-    await client.auth.admin.updateUserById(existing.id, { password: TEST_PASSWORD })
+    // Only reset the password when it is actually wrong.
+    //
+    // Setting a password revokes every existing session for that user. This
+    // helper runs in the beforeAll of several API/RLS specs, which sort ahead of
+    // the browser specs — so an unconditional reset silently invalidated the
+    // shared storageState global-setup had just written, and every spec relying
+    // on it failed with a redirect to /login. Individual spec runs passed
+    // because global-setup re-wrote the state moments earlier.
+    if (!(await passwordWorks(TEST_EMAIL, TEST_PASSWORD))) {
+      await client.auth.admin.updateUserById(existing.id, { password: TEST_PASSWORD })
+    }
     return existing.id
   }
 
@@ -55,7 +81,11 @@ export async function ensureSecondTestUser(): Promise<string> {
   const existing = users.find(u => u.email === OTHER_TEST_EMAIL)
 
   if (existing) {
-    await client.auth.admin.updateUserById(existing.id, { password: OTHER_TEST_PASSWORD })
+    // Same reasoning as ensureTestUser: an unconditional password reset revokes
+    // this user's sessions, including the shared other-user storageState.
+    if (!(await passwordWorks(OTHER_TEST_EMAIL, OTHER_TEST_PASSWORD))) {
+      await client.auth.admin.updateUserById(existing.id, { password: OTHER_TEST_PASSWORD })
+    }
     return existing.id
   }
 
