@@ -35,6 +35,23 @@ export function mcpResourceUrl(request: Request): string {
 }
 
 /**
+ * Issuer URL of the authorization server — Supabase Auth's OAuth 2.1 server.
+ *
+ * Must match the `issuer` field in the AS's own RFC 8414 metadata, which
+ * Supabase serves at /.well-known/oauth-authorization-server/auth/v1.
+ */
+export function authorizationServerIssuer(): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!base) throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set')
+  return `${base.replace(/\/$/, '')}/auth/v1`
+}
+
+/** JWKS endpoint used to verify access tokens issued by that server. */
+export function jwksUrl(): string {
+  return `${authorizationServerIssuer()}/.well-known/jwks.json`
+}
+
+/**
  * 401 with the RFC 9728 discovery challenge attached.
  *
  * Body stays JSON-RPC shaped (-32001) so existing MCP clients and the endpoint

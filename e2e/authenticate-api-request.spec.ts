@@ -131,19 +131,36 @@ test('revoked key returns 401', async ({ request }) => {
   if (inserted?.id) await admin.from('api_keys').delete().eq('id', inserted.id)
 })
 
-// ── Env var fallback ──────────────────────────────────────────────────────────
+// ── Env var fallback is gone ──────────────────────────────────────────────────
+//
+// The dual-mode fallback used to accept a shared RINGMARK_API_KEY and resolve
+// it to "the oldest account in the database". With more than one account that
+// hands one tenant's data to whoever holds the shared secret. It has been
+// removed; RINGMARK_API_KEY is now an ordinary row in api_keys like any other.
 
-test('env var fallback — RINGMARK_API_KEY still returns 200 (dual-mode active)', async ({ request }) => {
-  // The existing API tests already exercise this path with the env var key.
-  // This test makes it explicit that the fallback is still active.
+test('RINGMARK_API_KEY works because it is a real api_keys row, not a fallback', async ({ request }) => {
+  if (!process.env.RINGMARK_API_KEY) {
+    console.log('RINGMARK_API_KEY not set — skipping')
+    return
+  }
   const r = await request.get(`${BASE}/api/v1/objects`, {
     headers: { Authorization: `Bearer ${process.env.RINGMARK_API_KEY}` },
   })
-  // If RINGMARK_API_KEY is not set in the test environment, this key won't work
-  // and the test should be skipped — not a failure of the new code.
-  if (!process.env.RINGMARK_API_KEY) {
-    console.log('RINGMARK_API_KEY not set — env var fallback not exercised in this environment')
-    return
-  }
   expect(r.status()).toBe(200)
+})
+
+test('an unknown opaque key is rejected — no fallback to the first account', async ({ request }) => {
+  const r = await request.get(`${BASE}/api/v1/objects`, {
+    headers: { Authorization: 'Bearer rmk_not_a_real_key_00000000000000' },
+  })
+  expect(r.status()).toBe(401)
+})
+
+test('a malformed JWT is rejected rather than treated as an API key', async ({ request }) => {
+  // Shape-routing sends anything JWT-looking down the OAuth path; a garbage
+  // signature must fail verification, not fall through to the key lookup.
+  const r = await request.get(`${BASE}/api/v1/objects`, {
+    headers: { Authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlIn0.bogussignature' },
+  })
+  expect(r.status()).toBe(401)
 })

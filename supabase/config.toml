@@ -35,3 +35,22 @@ enable_signup = true
 enable_signup = true
 double_confirm_changes = false
 enable_confirmations = false
+
+# OAuth 2.1 authorization server — what MCP clients (claude.ai and friends)
+# authenticate against. The resource server side lives in the app:
+#   /.well-known/oauth-protected-resource   RFC 9728 metadata
+#   /oauth/consent                          the screen named below
+#   /api/mcp                                the protected resource itself
+#
+# allow_dynamic_registration is required by claude.ai's custom connector flow —
+# it registers itself rather than using pre-issued credentials. It also means
+# any client can self-register, so the consent screen is the only human gate;
+# see the comment at the top of app/oauth/consent/page.tsx.
+#
+# NOTE: this configures `supabase start` locally only. The hosted project needs
+# the same switches under Authentication → OAuth Server in the dashboard, and
+# they are currently OFF (the AS metadata endpoint returns feature_disabled).
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/oauth/consent"
+allow_dynamic_registration = true
