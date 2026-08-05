@@ -24,12 +24,18 @@ export async function middleware(request: NextRequest) {
     pathname === '/workshop' ||
     pathname.startsWith('/objects') ||
     pathname.startsWith('/settings') ||
-    pathname.startsWith('/profile')
+    pathname.startsWith('/profile') ||
+    pathname.startsWith('/oauth')
   const isAuthRoute = pathname === '/login'
 
   if (isAdminRoute && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    // Carry the original destination through login. The OAuth consent screen
+    // depends on this: its authorization_id lives in the query string, and
+    // without it the consent request can't be resolved after signing in.
+    const next = `${pathname}${request.nextUrl.search}`
+    url.search = `?next=${encodeURIComponent(next)}`
     const response = NextResponse.redirect(url)
     // Copy refreshed session cookies so the auth page sees the correct state
     supabaseResponse.cookies.getAll().forEach((cookie) => {
@@ -54,6 +60,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // api/mcp and .well-known are excluded on purpose: both are token-authenticated
+    // or fully public, they must answer identically to anonymous clients, and
+    // running the Supabase session refresh on them only adds latency and cookie
+    // churn to requests that will never carry a browser session.
+    '/((?!_next/static|_next/image|favicon.ico|api/mcp|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

@@ -167,11 +167,12 @@ describe('action ownership — objects.ts', () => {
 
 describe('action ownership — photos.ts', () => {
   it('every exported function calls getOrCreateAccount()', () => {
-    // createPhotoRecord, deletePhoto, updatePhotoCaption, togglePhotoVisibility, movePhoto
+    // createPhotoRecord, deletePhoto, restorePhoto, updatePhotoCaption,
+    // togglePhotoVisibility, movePhoto
     const count = countOccurrences(photosSrc, 'getOrCreateAccount()')
     assert.ok(
-      count >= 5,
-      `Expected ≥5 getOrCreateAccount() calls in photos.ts, got ${count}`,
+      count >= 6,
+      `Expected ≥6 getOrCreateAccount() calls in photos.ts, got ${count}`,
     )
   })
 
@@ -201,25 +202,50 @@ describe('action ownership — photos.ts', () => {
     )
   })
 
-  it('deletePhoto fetches and verifies ownership BEFORE deleting from storage and DB', () => {
+  it('deletePhoto fetches and verifies ownership BEFORE flagging the row deleted', () => {
     const fnStart = photosSrc.indexOf('async function deletePhoto')
+    const fnEnd = photosSrc.indexOf('async function restorePhoto')
+    const slice = photosSrc.slice(fnStart, fnEnd)
+
+    const ownershipIdx = slice.indexOf(".eq('account_id', account.id)")
+    const writeIdx = slice.indexOf('deleted_at:')
+
+    assert.ok(ownershipIdx !== -1, 'deletePhoto must verify account ownership via account_id')
+    assert.ok(writeIdx !== -1, 'deletePhoto must set deleted_at')
+    assert.ok(
+      ownershipIdx < writeIdx,
+      'ownership check must appear BEFORE the soft-delete write in deletePhoto',
+    )
+  })
+
+  it('deletePhoto is a soft delete — it never removes the file or the row', () => {
+    const fnStart = photosSrc.indexOf('async function deletePhoto')
+    const fnEnd = photosSrc.indexOf('async function restorePhoto')
+    const slice = photosSrc.slice(fnStart, fnEnd)
+
+    assert.ok(
+      !slice.includes('.remove(['),
+      'deletePhoto must not remove the storage file — restorePhoto depends on it still being there',
+    )
+    assert.ok(
+      !slice.includes('.delete()'),
+      'deletePhoto must not hard-delete the row',
+    )
+  })
+
+  it('restorePhoto fetches and verifies ownership BEFORE clearing deleted_at', () => {
+    const fnStart = photosSrc.indexOf('async function restorePhoto')
     const fnEnd = photosSrc.indexOf('async function updatePhotoCaption')
     const slice = photosSrc.slice(fnStart, fnEnd)
 
     const ownershipIdx = slice.indexOf(".eq('account_id', account.id)")
-    const storageDeleteIdx = slice.indexOf('.remove([')
-    const dbDeleteIdx = slice.indexOf('.delete()')
+    const writeIdx = slice.indexOf('deleted_at: null')
 
-    assert.ok(ownershipIdx !== -1, 'deletePhoto must verify account ownership via account_id')
-    assert.ok(storageDeleteIdx !== -1, 'deletePhoto must remove from storage')
-    assert.ok(dbDeleteIdx !== -1, 'deletePhoto must delete from DB')
+    assert.ok(ownershipIdx !== -1, 'restorePhoto must verify account ownership via account_id')
+    assert.ok(writeIdx !== -1, 'restorePhoto must clear deleted_at')
     assert.ok(
-      ownershipIdx < storageDeleteIdx,
-      'ownership check must appear BEFORE storage .remove() in deletePhoto',
-    )
-    assert.ok(
-      ownershipIdx < dbDeleteIdx,
-      'ownership check must appear BEFORE DB .delete() in deletePhoto',
+      ownershipIdx < writeIdx,
+      'ownership check must appear BEFORE the restore write in restorePhoto',
     )
   })
 

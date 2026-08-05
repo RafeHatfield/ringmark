@@ -1,24 +1,42 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer } from "@modelcontextprotocol/server";
 import { readFileSync } from 'fs'
 import { z } from 'zod'
 
+export const SERVER_INFO = { name: 'ringmark', version: '0.4.0' } as const
+
 /**
- * Builds and returns the configured McpServer with all tools registered.
- * Separated from the transport startup in index.ts so tests can import it
- * without triggering stdio or process.exit.
+ * Tool registration, kept separate from server construction so both entry
+ * points can use it:
+ *   - mcp/index.ts (stdio) builds its own server via createServer()
+ *   - app/api/mcp/route.ts hands mcp-handler a callback, and mcp-handler owns
+ *     the server instance
+ *
+ * Also keeps tests able to import it without triggering stdio or process.exit.
  */
 interface ServerOptions {
   /** When true, file_path uploads are disabled (hosted/serverless environment). */
   hosted?: boolean
+  /**
+   * When true, delete_object exposes `force`, which allows deleting a published
+   * object and taking its live public page down.
+   *
+   * Off by default. The remote server is reachable from the public internet, so
+   * there the only deletable object is an unpublished leaf — the existing API
+   * guards block published objects and objects with children, and without
+   * `force` there is no override. The local stdio server opts in.
+   */
+  allowForceDelete?: boolean
 }
 
-export function createServer(
+/** Registers every Ringmark tool onto an existing server instance. */
+export function registerTools(
+  server: McpServer,
   apiKey: string,
   apiBase: string,
   timeoutMs = 30_000,
   options: ServerOptions = {},
-): McpServer {
-  const { hosted = false } = options
+): void {
+  const { hosted = false, allowForceDelete = false } = options
 
   // ── API client ────────────────────────────────────────────────────────────
 
@@ -90,24 +108,30 @@ export function createServer(
 
   // ── Server ────────────────────────────────────────────────────────────────
 
-  const server = new McpServer({ name: 'ringmark', version: '0.2.0' })
+  // Every tool operates on the Ringmark API — a closed, known system — so
+  // openWorldHint is false throughout. The one exception is upload_photo,
+  // which can fetch an arbitrary image URL.
+  const CLOSED_WORLD = { openWorldHint: false } as const
 
   // ── list_objects ──────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'list_objects',
-    'List workshop objects, most recently updated first.',
     {
-      limit: z.number().int().min(1).max(50).default(20).describe('Max results (default 20)'),
-      object_type: z.string().optional().describe(
-        'Filter by type: source | log | chunk | slab | blank | rough_bowl | ' +
-        'finished_bowl | pen_blank | spindle_blank | offcut | other'
-      ),
-      status: z.string().optional().describe(
-        'Filter by status: acquired | stored | sealed | cut | drying | ' +
-        'rough_turned | finished | for_sale | sold | gifted | scrapped'
-      ),
-      published: z.boolean().optional().describe('If true, return only published objects'),
+      description: 'List workshop objects, most recently updated first.',
+      annotations: { title: 'List objects', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              limit: z.number().int().min(1).max(50).default(20).describe('Max results (default 20)'),
+              object_type: z.string().optional().describe(
+                'Filter by type: source | log | chunk | slab | blank | rough_bowl | ' +
+                'finished_bowl | pen_blank | spindle_blank | offcut | other'
+              ),
+              status: z.string().optional().describe(
+                'Filter by status: acquired | stored | sealed | cut | drying | ' +
+                'rough_turned | finished | for_sale | sold | gifted | scrapped'
+              ),
+              published: z.boolean().optional().describe('If true, return only published objects'),
+            }),
     },
     async ({ limit, object_type, status, published }) => {
       const params = new URLSearchParams()
@@ -122,10 +146,13 @@ export function createServer(
 
   // ── get_object ────────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'get_object',
-    'Get full details of a single object by its workshop ID (e.g. "RH1") or UUID.',
-    { id: z.string().describe('Workshop ID (e.g. RH1, RH1-2) or UUID') },
+    {
+      description: 'Get full details of a single object by its workshop ID (e.g. "RH1") or UUID.',
+      annotations: { title: 'Get object', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({ id: z.string().describe('Workshop ID (e.g. RH1, RH1-2) or UUID') }),
+    },
     async ({ id }) => {
       try {
         const data = await api('GET', `/objects/${encodeURIComponent(id)}`)
@@ -142,10 +169,13 @@ export function createServer(
 
   // ── search_objects ────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'search_objects',
-    'Search objects by title keyword, species, workshop ID, or public title.',
-    { query: z.string().describe('Search term') },
+    {
+      description: 'Search objects by title keyword, species, workshop ID, or public title.',
+      annotations: { title: 'Search objects', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({ query: z.string().describe('Search term') }),
+    },
     async ({ query }) => {
       const data = await api('GET', `/objects?q=${encodeURIComponent(query.trim())}`)
       return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
@@ -154,22 +184,26 @@ export function createServer(
 
   // ── create_object ─────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'create_object',
-    'Create a new root object (source tree, found wood, etc.). Workshop ID is auto-generated unless you specify one.',
     {
-      object_type: z.string().default('source').describe(
-        'Type: source | log | chunk | slab | blank | rough_bowl | finished_bowl | ' +
-        'pen_blank | spindle_blank | offcut | other'
-      ),
-      workshop_id: z.string().optional().describe(
-        'Override the auto-generated workshop ID (e.g. RH7). Omit to auto-assign.'
-      ),
-      title: z.string().optional().describe('Internal working title / description'),
-      species: z.string().optional().describe('Wood species (e.g. Bigleaf Maple, Red Cedar Burl)'),
-      status: z.string().optional().describe('Initial status (default: acquired)'),
-      location_text: z.string().optional().describe('Where the wood came from — stays private'),
-      private_notes: z.string().optional().describe('Private workshop notes'),
+      description:
+        'Create a new root object (source tree, found wood, etc.). Workshop ID is auto-generated unless you specify one.',
+      annotations: { title: 'Create object', ...CLOSED_WORLD },
+      inputSchema: z.object({
+              object_type: z.string().default('source').describe(
+                'Type: source | log | chunk | slab | blank | rough_bowl | finished_bowl | ' +
+                'pen_blank | spindle_blank | offcut | other'
+              ),
+              workshop_id: z.string().optional().describe(
+                'Override the auto-generated workshop ID (e.g. RH7). Omit to auto-assign.'
+              ),
+              title: z.string().optional().describe('Internal working title / description'),
+              species: z.string().optional().describe('Wood species (e.g. Bigleaf Maple, Red Cedar Burl)'),
+              status: z.string().optional().describe('Initial status (default: acquired)'),
+              location_text: z.string().optional().describe('Where the wood came from — stays private'),
+              private_notes: z.string().optional().describe('Private workshop notes'),
+            }),
     },
     async ({ object_type, workshop_id, title, species, status, location_text, private_notes }) => {
       const body: Record<string, unknown> = { object_type }
@@ -192,19 +226,23 @@ export function createServer(
 
   // ── add_child ─────────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'add_child',
-    'Create a child object derived from an existing piece (e.g. a bowl blank from a log). ' +
-    'Child workshop ID is auto-generated using flat descendant numbering (e.g. RH1 → RH1-1).',
     {
-      parent_id: z.string().describe('Workshop ID or UUID of the parent object'),
-      object_type: z.string().describe(
-        'Type of the new child: log | chunk | slab | blank | rough_bowl | finished_bowl | etc.'
-      ),
-      title: z.string().optional(),
-      species: z.string().optional().describe('Inherits from parent if omitted'),
-      status: z.string().optional(),
-      private_notes: z.string().optional(),
+      description:
+        'Create a child object derived from an existing piece (e.g. a bowl blank from a log). ' +
+        'Child workshop ID is auto-generated using flat descendant numbering (e.g. RH1 → RH1-1).',
+      annotations: { title: 'Add child object', ...CLOSED_WORLD },
+      inputSchema: z.object({
+              parent_id: z.string().describe('Workshop ID or UUID of the parent object'),
+              object_type: z.string().describe(
+                'Type of the new child: log | chunk | slab | blank | rough_bowl | finished_bowl | etc.'
+              ),
+              title: z.string().optional(),
+              species: z.string().optional().describe('Inherits from parent if omitted'),
+              status: z.string().optional(),
+              private_notes: z.string().optional(),
+            }),
     },
     async ({ parent_id, object_type, title, species, status, private_notes }) => {
       const body: Record<string, unknown> = { object_type }
@@ -227,26 +265,30 @@ export function createServer(
 
   // ── update_object ─────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'update_object',
-    'Update internal fields on an existing object. Only pass fields you want to change.\n\n' +
-    'This tool handles: object_type, status, title, species, location_text, private_notes, parent_id.\n' +
-    'It does NOT handle public-facing fields (public_title, public_story, public_notes, public_care) — ' +
-    'use save_story for those. It does NOT toggle publish state — use publish_object for that.',
     {
-      id: z.string().describe('Workshop ID or UUID'),
-      workshop_id: z.string().optional().describe(
-        'Rename the workshop ID (e.g. "RH3"). Must be unique. Renaming a root does not auto-rename children — update each child separately.'
-      ),
-      object_type: z.string().optional(),
-      status: z.string().optional(),
-      title: z.string().optional(),
-      species: z.string().optional(),
-      location_text: z.string().optional(),
-      private_notes: z.string().optional(),
-      parent_id: z.string().nullable().optional().describe(
-        'Workshop ID or UUID of the new parent. Pass null to make this object a root with no parent.'
-      ),
+      description:
+        'Update internal fields on an existing object. Only pass fields you want to change.\n\n' +
+        'This tool handles: object_type, status, title, species, location_text, private_notes, parent_id.\n' +
+        'It does NOT handle public-facing fields (public_title, public_story, public_notes, public_care) — ' +
+        'use save_story for those. It does NOT toggle publish state — use publish_object for that.',
+      annotations: { title: 'Update object', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              id: z.string().describe('Workshop ID or UUID'),
+              workshop_id: z.string().optional().describe(
+                'Rename the workshop ID (e.g. "RH3"). Must be unique. Renaming a root does not auto-rename children — update each child separately.'
+              ),
+              object_type: z.string().optional(),
+              status: z.string().optional(),
+              title: z.string().optional(),
+              species: z.string().optional(),
+              location_text: z.string().optional(),
+              private_notes: z.string().optional(),
+              parent_id: z.string().nullable().optional().describe(
+                'Workshop ID or UUID of the new parent. Pass null to make this object a root with no parent.'
+              ),
+            }),
     },
     async ({ id, workshop_id, object_type, status, title, species, location_text, private_notes, parent_id }) => {
       const body: Record<string, unknown> = {}
@@ -269,41 +311,78 @@ export function createServer(
   )
 
   // ── delete_object ─────────────────────────────────────────────────────────
+  //
+  // Hard delete, and the only irreversible tool here. Registered in one of two
+  // shapes depending on allowForceDelete — see ServerOptions.
 
-  server.tool(
-    'delete_object',
-    'Permanently delete an object and all its photos. Cannot be undone.\n\n' +
-    'Guards:\n' +
-    '• Published objects: blocked unless force=true. Unpublish first or pass force=true.\n' +
-    '• Objects with children: always blocked — delete or re-parent children first.\n\n' +
-    'Photos are removed from storage as part of deletion.',
-    {
-      id: z.string().describe('Workshop ID (e.g. RH4-2) or UUID of the object to delete'),
-      force: z.boolean().default(false).describe('Set true to delete a published object. Has no effect on the children guard.'),
-    },
-    async ({ id, force }) => {
-      const qs = force ? '?force=true' : ''
-      await api('DELETE', `/objects/${encodeURIComponent(id)}${qs}`)
-      return { content: [{ type: 'text' as const, text: `Deleted ${id}.` }] }
-    }
-  )
+  async function deleteObject(id: string, force: boolean) {
+    const qs = force ? '?force=true' : ''
+    await api('DELETE', `/objects/${encodeURIComponent(id)}${qs}`)
+    return { content: [{ type: 'text' as const, text: `Deleted ${id}.` }] }
+  }
+
+  if (allowForceDelete) {
+    server.registerTool(
+      'delete_object',
+      {
+        description:
+          'Permanently delete an object and all its photos. Cannot be undone.\n\n' +
+          'Guards:\n' +
+          '• Published objects: blocked unless force=true. Unpublish first or pass force=true.\n' +
+          '• Objects with children: always blocked — delete or re-parent children first.\n\n' +
+          'Photos are removed from storage as part of deletion, including any that were ' +
+          'previously soft-deleted.',
+        annotations: { title: 'Delete object', destructiveHint: true, ...CLOSED_WORLD },
+        inputSchema: z.object({
+                  id: z.string().describe('Workshop ID (e.g. RH4-2) or UUID of the object to delete'),
+                  force: z.boolean().default(false).describe(
+                    'Set true to delete a published object, taking its live public page down. Has no effect on the children guard.'
+                  ),
+                }),
+      },
+      async ({ id, force }) => deleteObject(id, force ?? false)
+    )
+  } else {
+    server.registerTool(
+      'delete_object',
+      {
+        description:
+          'Permanently delete an object and all its photos. Cannot be undone.\n\n' +
+          'Guards:\n' +
+          '• Published objects: blocked. Unpublish first with publish_object.\n' +
+          '• Objects with children: blocked — delete or re-parent children first.\n\n' +
+          'Photos are removed from storage as part of deletion, including any that were ' +
+          'previously soft-deleted.\n\n' +
+          'There is no force option on this server, so a published object cannot be deleted here at all.',
+        annotations: { title: 'Delete object', destructiveHint: true, ...CLOSED_WORLD },
+        inputSchema: z.object({
+                  id: z.string().describe('Workshop ID (e.g. RH4-2) or UUID of the object to delete'),
+                }),
+      },
+      async ({ id }) => deleteObject(id, false)
+    )
+  }
 
   // ── save_story ────────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'save_story',
-    'Set the public story fields on an object (title, narrative, notes, care instructions). ' +
-    'Does not publish — call publish_object separately.',
     {
-      id: z.string().describe('Workshop ID or UUID'),
-      public_title: z.string().optional().describe('Title shown on the public page'),
-      public_story: z.string().optional().describe(
-        'The narrative — where the wood came from, what it became'
-      ),
-      public_notes: z.string().optional().describe(
-        'Species, dimensions, finish — anything buyers should know'
-      ),
-      public_care: z.string().optional().describe('Care instructions'),
+      description:
+        'Set the public story fields on an object (title, narrative, notes, care instructions). ' +
+        'Does not publish — call publish_object separately.',
+      annotations: { title: 'Save public story', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              id: z.string().describe('Workshop ID or UUID'),
+              public_title: z.string().optional().describe('Title shown on the public page'),
+              public_story: z.string().optional().describe(
+                'The narrative — where the wood came from, what it became'
+              ),
+              public_notes: z.string().optional().describe(
+                'Species, dimensions, finish — anything buyers should know'
+              ),
+              public_care: z.string().optional().describe('Care instructions'),
+            }),
     },
     async ({ id, public_title, public_story, public_notes, public_care }) => {
       const body: Record<string, unknown> = {}
@@ -326,12 +405,16 @@ export function createServer(
 
   // ── publish_object ────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'publish_object',
-    'Publish or unpublish an object. Published pieces appear on the /maker page and at their /p/ URL.',
     {
-      id: z.string().describe('Workshop ID or UUID'),
-      published: z.boolean().default(true).describe('true to publish, false to unpublish'),
+      description:
+        'Publish or unpublish an object. Published pieces appear on the /maker page and at their /p/ URL.',
+      annotations: { title: 'Publish object', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              id: z.string().describe('Workshop ID or UUID'),
+              published: z.boolean().default(true).describe('true to publish, false to unpublish'),
+            }),
     },
     async ({ id, published }) => {
       const updated = await api('PATCH', `/objects/${encodeURIComponent(id)}`, { is_published: published }) as {
@@ -350,23 +433,46 @@ export function createServer(
 
   // ── list_photos ───────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'list_photos',
-    'List all photos attached to an object, with their IDs and signed URLs. ' +
-    'Use this before delete_photo to find the photo IDs you need.',
-    { object_id: z.string().describe('Workshop ID (e.g. RH4) or UUID') },
-    async ({ object_id }) => {
-      const data = await api('GET', `/objects/${encodeURIComponent(object_id)}/photos`) as {
-        data: Array<{ id: string; caption: string | null; is_public: boolean; sort_order: number; signed_url: string | null }>
+    {
+      description:
+        'List the photos attached to an object, with their IDs. ' +
+        'Use this before delete_photo, restore_photo, or update_photo to find the photo IDs you need.\n\n' +
+        'Deleted photos are hidden by default — pass include_deleted to see them and get the IDs ' +
+        'needed to restore.',
+      annotations: { title: 'List photos', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              object_id: z.string().describe('Workshop ID (e.g. RH4) or UUID'),
+              include_deleted: z.boolean().default(false).describe(
+                'Include soft-deleted photos, marked [deleted] in the output. Use to find IDs for restore_photo.'
+              ),
+            }),
+    },
+    async ({ object_id, include_deleted }) => {
+      const qs = include_deleted ? '?include_deleted=true' : ''
+      const data = await api('GET', `/objects/${encodeURIComponent(object_id)}/photos${qs}`) as {
+        data: Array<{
+          id: string; caption: string | null; is_public: boolean; sort_order: number
+          signed_url: string | null; deleted_at?: string | null
+        }>
         total: number
       }
       if (data.total === 0) {
-        return { content: [{ type: 'text' as const, text: `No photos on ${object_id}.` }] }
+        return {
+          content: [{
+            type: 'text' as const,
+            text: include_deleted
+              ? `No photos on ${object_id}.`
+              : `No photos on ${object_id}. Try include_deleted to check for deleted ones.`,
+          }],
+        }
       }
       const lines = data.data.map((p, i) => {
         const caption = p.caption ? ` "${p.caption}"` : ''
         const pub = p.is_public ? '' : ' [private]'
-        return `${i + 1}. ${p.id}${caption}${pub}`
+        const del = p.deleted_at ? ' [deleted]' : ''
+        return `${i + 1}. ${p.id}${caption}${pub}${del}`
       })
       return { content: [{ type: 'text' as const, text: `${data.total} photo(s) on ${object_id}:\n${lines.join('\n')}` }] }
     }
@@ -374,30 +480,74 @@ export function createServer(
 
   // ── delete_photo ──────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'delete_photo',
-    'Permanently delete a photo from an object. Use list_photos first to get the photo ID. ' +
-    'This cannot be undone.',
     {
-      object_id: z.string().describe('Workshop ID (e.g. RH4) or UUID of the object the photo belongs to'),
-      photo_id: z.string().describe('UUID of the photo to delete (from list_photos)'),
+      description:
+        'Delete a photo from an object. Use list_photos first to get the photo ID.\n\n' +
+        'This is reversible: the photo is removed from the object, the public story page, and ' +
+        'the share card immediately, but the image file is kept so restore_photo can bring it ' +
+        'back at its original position. To find a deleted photo\'s ID later, call list_photos ' +
+        'with include_deleted.',
+      annotations: { title: 'Delete photo', destructiveHint: true, idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              object_id: z.string().describe('Workshop ID (e.g. RH4) or UUID of the object the photo belongs to'),
+              photo_id: z.string().describe('UUID of the photo to delete (from list_photos)'),
+            }),
     },
     async ({ object_id, photo_id }) => {
       await api('DELETE', `/objects/${encodeURIComponent(object_id)}/photos/${encodeURIComponent(photo_id)}`)
-      return { content: [{ type: 'text' as const, text: `Photo ${photo_id} deleted from ${object_id}.` }] }
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Photo ${photo_id} deleted from ${object_id}. Restore it with restore_photo if that was a mistake.`,
+        }],
+      }
+    }
+  )
+
+  // ── restore_photo ─────────────────────────────────────────────────────────
+
+  server.registerTool(
+    'restore_photo',
+    {
+      description:
+        'Restore a previously deleted photo, putting it back at its original position on the object. ' +
+        'Call list_photos with include_deleted first to find the photo ID.',
+      annotations: { title: 'Restore photo', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              object_id: z.string().describe('Workshop ID (e.g. RH4) or UUID of the object the photo belongs to'),
+              photo_id: z.string().describe('UUID of the deleted photo (from list_photos with include_deleted)'),
+            }),
+    },
+    async ({ object_id, photo_id }) => {
+      const restored = await api(
+        'POST',
+        `/objects/${encodeURIComponent(object_id)}/photos/${encodeURIComponent(photo_id)}/restore`
+      ) as { id: string; sort_order: number }
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Photo ${restored.id} restored to ${object_id} at position ${restored.sort_order}.`,
+        }],
+      }
     }
   )
 
   // ── update_photo ──────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'update_photo',
-    'Update the caption of an existing photo without touching the image file or sort order. ' +
-    'Use list_photos first to find the photo_id.',
     {
-      object_id: z.string().describe('Workshop ID (e.g. RH1) or UUID of the object the photo belongs to'),
-      photo_id: z.string().describe('UUID of the photo (from list_photos)'),
-      caption: z.string().describe('New caption text. Pass an empty string to clear the caption.'),
+      description:
+        'Update the caption of an existing photo without touching the image file or sort order. ' +
+        'Use list_photos first to find the photo_id.',
+      annotations: { title: 'Update photo caption', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              object_id: z.string().describe('Workshop ID (e.g. RH1) or UUID of the object the photo belongs to'),
+              photo_id: z.string().describe('UUID of the photo (from list_photos)'),
+              caption: z.string().describe('New caption text. Pass an empty string to clear the caption.'),
+            }),
     },
     async ({ object_id, photo_id, caption }) => {
       await api(
@@ -417,12 +567,16 @@ export function createServer(
 
   // ── get_lineage ───────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'get_lineage',
-    'Get the full journey chain for an object — from root source down to the requested piece. ' +
-    'Returns each step with its label, step notes, photo count, and thumbnail URL, ordered root-first. ' +
-    'Use this to understand an object\'s complete history before writing a public story.',
-    { id: z.string().describe('Workshop ID (e.g. RH9-4) or UUID of any object in the chain') },
+    {
+      description:
+        'Get the full journey chain for an object — from root source down to the requested piece. ' +
+        'Returns each step with its label, step notes, photo count, and thumbnail URL, ordered root-first. ' +
+        'Use this to understand an object\'s complete history before writing a public story.',
+      annotations: { title: 'Get lineage', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({ id: z.string().describe('Workshop ID (e.g. RH9-4) or UUID of any object in the chain') }),
+    },
     async ({ id }) => {
       const data = await api('GET', `/objects/${encodeURIComponent(id)}/lineage`) as {
         steps: Array<{ workshop_id: string; step_label: string; public_story: string | null; photo_count: number }>
@@ -439,34 +593,39 @@ export function createServer(
 
   // ── upload_photo ──────────────────────────────────────────────────────────
 
-  server.tool(
+  server.registerTool(
     'upload_photo',
-    'Upload a photo to a workshop object. The photo appears on the public story page.\n\n' +
-    'Three modes — use whichever applies:\n' +
-    '• image_url: a publicly accessible URL (iCloud share link, Google Photos link, Dropbox, CDN, etc.).\n' +
-    '  The MCP server fetches the image server-side. This is the best option when Claude has a URL.\n' +
-    '• file_path: an absolute path on the machine running the MCP server (the user\'s own disk,\n' +
-    '  e.g. ~/Downloads/IMG_1719.jpeg). Best when the file is already local.\n' +
-    '• image_data + filename: base64 bytes (last resort — impractical for real photos).',
     {
-      object_id: z.string().describe('Workshop ID (e.g. RH1) or UUID of the object to attach the photo to'),
-      image_url: z.string().optional().describe(
-        'Publicly accessible URL of the image. The MCP server will download it. ' +
-        'Works with iCloud shared links, Google Photos, Dropbox, Imgur, CDN URLs, etc.'
-      ),
-      file_path: z.string().optional().describe(
-        hosted
-          ? 'NOT AVAILABLE on the hosted server — local file paths cannot be read remotely. Use image_url or image_data instead.'
-          : 'Absolute path to an image file on the MCP server host (the user\'s local disk). E.g. /Users/rafe/Downloads/IMG_1719.jpeg'
-      ),
-      image_data: z.string().optional().describe(
-        'Base64-encoded image bytes (no data: URI prefix). Last resort — impractical for images over ~100 KB. ' +
-        'Requires filename. Use image_url or file_path instead whenever possible.'
-      ),
-      filename: z.string().optional().describe(
-        'Original filename including extension (e.g. IMG_1719.jpeg). Required when using image_data.'
-      ),
-      caption: z.string().optional().describe('Optional caption for the photo'),
+      description:
+        'Upload a photo to a workshop object. The photo appears on the public story page.\n\n' +
+        'Three modes — use whichever applies:\n' +
+        '• image_url: a publicly accessible URL (iCloud share link, Google Photos link, Dropbox, CDN, etc.).\n' +
+        '  The MCP server fetches the image server-side. This is the best option when Claude has a URL.\n' +
+        '• file_path: an absolute path on the machine running the MCP server (the user\'s own disk,\n' +
+        '  e.g. ~/Downloads/IMG_1719.jpeg). Best when the file is already local.\n' +
+        '• image_data + filename: base64 bytes (last resort — impractical for real photos).',
+      // openWorldHint stays true here: image_url fetches an arbitrary URL.
+      annotations: { title: 'Upload photo', openWorldHint: true },
+      inputSchema: z.object({
+              object_id: z.string().describe('Workshop ID (e.g. RH1) or UUID of the object to attach the photo to'),
+              image_url: z.string().optional().describe(
+                'Publicly accessible URL of the image. The MCP server will download it. ' +
+                'Works with iCloud shared links, Google Photos, Dropbox, Imgur, CDN URLs, etc.'
+              ),
+              file_path: z.string().optional().describe(
+                hosted
+                  ? 'NOT AVAILABLE on the hosted server — local file paths cannot be read remotely. Use image_url or image_data instead.'
+                  : 'Absolute path to an image file on the MCP server host (the user\'s local disk). E.g. /Users/rafe/Downloads/IMG_1719.jpeg'
+              ),
+              image_data: z.string().optional().describe(
+                'Base64-encoded image bytes (no data: URI prefix). Last resort — impractical for images over ~100 KB. ' +
+                'Requires filename. Use image_url or file_path instead whenever possible.'
+              ),
+              filename: z.string().optional().describe(
+                'Original filename including extension (e.g. IMG_1719.jpeg). Required when using image_data.'
+              ),
+              caption: z.string().optional().describe('Optional caption for the photo'),
+            }),
     },
     async ({ object_id, image_url, file_path, image_data, filename, caption }) => {
       let fileBuffer: Buffer
@@ -559,7 +718,21 @@ export function createServer(
       return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
     }
   )
+}
 
+/**
+ * Builds a standalone McpServer with every tool registered. Used by the stdio
+ * entry point and the tests. The HTTP route lets mcp-handler own the server
+ * instance and calls registerTools() directly instead.
+ */
+export function createServer(
+  apiKey: string,
+  apiBase: string,
+  timeoutMs = 30_000,
+  options: ServerOptions = {},
+): McpServer {
+  const server = new McpServer(SERVER_INFO)
+  registerTools(server, apiKey, apiBase, timeoutMs, options)
   return server
 }
 

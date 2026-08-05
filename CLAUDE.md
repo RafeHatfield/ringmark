@@ -54,23 +54,58 @@ See `ringmark-project-spec.md` for full product specification. The spec is the s
 
 The REST API lives at `app/api/v1/` and is separate from the admin routes and server actions. It is designed for LLM/MCP clients and future integrations.
 
-**Authentication:** All object endpoints require `Authorization: Bearer <RINGMARK_API_KEY>`. The key is stored in the `RINGMARK_API_KEY` environment variable. Comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
+**Authentication:** `authenticateApiRequest()` in `lib/api-auth.ts` accepts two Bearer credential types, routed by token shape:
+- **Account API key** — SHA-256 matched against `api_keys.key_hash`, scoped to that key's account. Used by the local stdio MCP server, scripts, CI.
+- **OAuth 2.1 access token** — JWT verified against the Supabase project JWKS, audience-checked against this resource server (RFC 8707), then `sub` → `account_members` → account. Used by claude.ai.
+
+There is **no shared-secret fallback**. The old one resolved a single env key to "the oldest account in the database" — a cross-tenant leak the moment there is more than one account, which there now is. Never reintroduce a code path that picks an account without deriving it from the caller's credential.
 
 **Endpoints:**
 ```
-GET    /api/v1/objects              List objects; filter by type, status, published; search with ?q
-POST   /api/v1/objects              Create root object (auto ID + slug if not provided)
-GET    /api/v1/objects/:id          Get single object (UUID or workshop ID accepted)
-PATCH  /api/v1/objects/:id          Partial update; whitelisted fields only; is_published toggles publish state
-DELETE /api/v1/objects/:id          Delete object (children cascade)
-POST   /api/v1/objects/:id/children Add child with auto flat-numbered workshop ID
-GET    /api/v1/openapi.json         OpenAPI 3.1 spec (no auth)
-GET    /api/v1/docs                 Swagger UI (no auth)
+GET    /api/v1/objects                              List; filter by type, status, published; search with ?q
+POST   /api/v1/objects                              Create root object (auto ID + slug if not provided)
+GET    /api/v1/objects/:id                          Get single object (UUID or workshop ID accepted)
+PATCH  /api/v1/objects/:id                          Partial update; whitelisted fields; is_published toggles publish
+DELETE /api/v1/objects/:id                          Hard delete + storage sweep; 409 if published (unless ?force=true)
+                                                    or if it has children (always)
+POST   /api/v1/objects/:id/children                 Add child with auto flat-numbered workshop ID
+GET    /api/v1/objects/:id/lineage                  Root-first journey chain
+GET    /api/v1/objects/:id/photos                   List live photos; ?include_deleted=true to see soft-deleted
+POST   /api/v1/objects/:id/photos                   Upload (multipart)
+PATCH  /api/v1/objects/:id/photos/:photoId          Update caption
+DELETE /api/v1/objects/:id/photos/:photoId          SOFT delete — reversible, file retained
+POST   /api/v1/objects/:id/photos/:photoId/restore  Undo a soft delete
+GET    /api/v1/openapi.json                         OpenAPI 3.1 spec (no auth)
+GET    /api/v1/docs                                 Swagger UI (no auth)
 ```
+
+**Photo deletes are soft.** `deleted_at` is set; the storage file stays so restore works. Every photo *read* path must filter `.is('deleted_at', null)` — the two that matter most are `app/p/[slug]/page.tsx` and `app/p/[slug]/opengraph-image.tsx`, because missing them leaves a "deleted" photo live on the public web. Two paths deliberately do **not** filter, both commented in place: object deletion sweeps storage for all photos, and `createPhotoRecord`'s max-`sort_order` lookup counts deleted rows so restore can't collide.
 
 **Self-documenting:** `lib/api-schemas.ts` is the single source of truth. Zod schemas annotated with `.openapi()` drive both request validation and the generated OpenAPI spec (`lib/api-spec.ts`). If you add an endpoint, add the route and register it in `api-spec.ts`.
 
-**Service client:** API routes use `createServiceClient()` (service role, bypasses RLS) scoped to the account via `getAccount()`. RLS is not the auth boundary here — `verifyApiKey()` and account scoping are.
+**Service client:** API routes use `createServiceClient()` (service role, bypasses RLS), scoped to the account returned by `authenticateApiRequest()`. RLS is not the auth boundary here — the credential check and `.eq('account_id', account.id)` are. There is no `getAccount(db)` helper; it was deleted for encoding the "oldest account" assumption.
+
+### Remote MCP server
+
+`app/api/mcp/route.ts` serves Streamable HTTP via `mcp-handler` on MCP SDK v2. Tool handlers proxy the REST API above, so authorization lives in exactly one place — do not reimplement authz in the MCP layer.
+
+- `mcp/server.ts` holds the single tool definition set. `registerTools()` is shared; `createServer()` wraps it for the stdio entry point (`mcp/index.ts`) and tests.
+- **The remote server is built without `allowForceDelete`**, so `delete_object` has no `force` parameter there. With the API's existing guards, the only object the public endpoint can delete is an unpublished leaf. The local stdio server opts in.
+- Clients must send `Accept: application/json, text/event-stream` or get 406 — a Streamable HTTP spec requirement, not ours.
+- 401s carry an RFC 9728 `WWW-Authenticate` challenge (`lib/mcp-auth.ts`). Without `resource_metadata` in it, a client gets a 401 with nowhere to go and the OAuth flow can never start.
+- `__tests__/mcp/contract-drift.test.ts` asserts every endpoint the tools call still exists in the OpenAPI spec. If you change a route, that test tells you which tool broke.
+
+### OAuth 2.1
+
+Supabase Auth is the authorization server; Ringmark is the resource server.
+
+```
+/.well-known/oauth-protected-resource   RFC 9728 metadata (public, no auth)
+/oauth/consent                          consent screen (auth-gated)
+/api/mcp                                the protected resource
+```
+
+DCR is enabled because claude.ai's connector flow requires it — which means **any client can self-register and choose its own display name**. The consent screen is the only human gate, so it leads with the redirect URI host (the one value an attacker can't freely pick) and never renders the client's remote logo.
 
 ### Key Directories
 ```
@@ -82,9 +117,10 @@ components/                 React components (ui/ for shadcn, rest are project-s
 lib/                        Utilities (supabase/, id-gen.ts, slug-gen.ts, types.ts, constants.ts)
 lib/api-schemas.ts          Zod schemas — single source of truth for validation + OpenAPI spec
 lib/api-spec.ts             OpenAPI 3.1 spec generator (generateSpec())
-lib/api-auth.ts             verifyApiKey() with timing-safe comparison
+lib/api-auth.ts             authenticateApiRequest() — API key + OAuth JWT, both account-scoped
+lib/mcp-auth.ts             RFC 9728 discovery helpers + the 401 challenge
 lib/resolve-object.ts       resolveObject() — UUID or workshop ID lookup scoped to account
-lib/supabase/service.ts     createServiceClient() + getAccount() for API routes
+lib/supabase/service.ts     createServiceClient() for API routes (no getAccount — see above)
 actions/                    Server actions (objects.ts, photos.ts, story.ts)
 supabase/migrations/        SQL migrations (run via Supabase CLI)
 tasks/                      Agent task coordination files
@@ -126,6 +162,9 @@ npm run lint
 
 # API tests (Playwright against live dev server)
 npm run test:api
+
+# MCP tool tests + MCP↔REST contract drift guard
+npm run test:mcp
 ```
 
 ---

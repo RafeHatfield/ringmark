@@ -18,8 +18,7 @@
  *
  * Set RINGMARK_API_URL to override the default http://localhost:3000.
  */
-
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import fs from 'fs'
 import path from 'path'
 import { createServer } from './server.js'
@@ -57,7 +56,10 @@ if (!API_KEY) {
   process.exit(1)
 }
 
-const server = createServer(API_KEY, API_BASE)
+// allowForceDelete: this is the local stdio server, driven by the account owner
+// at their own machine. The remote HTTP server (app/api/mcp/route.ts) leaves it
+// off, so a published object can't be taken down from the public endpoint.
+const server = createServer(API_KEY, API_BASE, 30_000, { allowForceDelete: true })
 
 async function main() {
   const transport = new StdioServerTransport()

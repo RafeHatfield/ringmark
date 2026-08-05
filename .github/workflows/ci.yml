@@ -25,6 +25,12 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # Separate runner (tsx rather than --experimental-strip-types) so this
+      # needs its own step. Includes the MCP↔REST contract drift guard, which
+      # is only useful if it actually runs on every push.
+      - name: MCP tests
+        run: npm run test:mcp
+
       - name: Type check
         run: npx tsc --noEmit
 

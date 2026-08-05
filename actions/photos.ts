@@ -23,6 +23,9 @@ export async function createPhotoRecord(
 
   if (!object) return { error: 'Object not found.' }
 
+  // Deliberately NOT filtered by deleted_at: sort_order must stay monotonic
+  // across soft-deleted rows too, or restoring a photo collides with whatever
+  // took its old slot.
   const { data: last } = await supabase
     .from('object_photos')
     .select('sort_order')
@@ -53,26 +56,61 @@ export async function createPhotoRecord(
   return { id: created.id }
 }
 
+/**
+ * Soft-deletes a photo. The storage file is retained so the delete stays
+ * reversible via restorePhoto(); the bucket is private and every public read
+ * mints a signed URL on demand, so a soft-deleted photo is unreachable once
+ * it drops out of the read paths.
+ */
 export async function deletePhoto(photoId: string): Promise<{ error?: string }> {
   const supabase = await createClient()
   const account = await getOrCreateAccount()
 
   const { data: photo } = await supabase
     .from('object_photos')
-    .select('id, storage_path, object_id, wood_objects(public_slug)')
+    .select('id, object_id, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
+    .is('deleted_at', null)
     .single()
 
   if (!photo) return { error: 'Photo not found.' }
 
-  const { error: storageError } = await supabase.storage.from('object-photos').remove([photo.storage_path])
-  if (storageError) console.error('[deletePhoto] storage remove failed:', storageError)
+  const { data: { user } } = await supabase.auth.getUser()
 
   const { error } = await supabase
     .from('object_photos')
-    .delete()
+    .update({ deleted_at: new Date().toISOString(), deleted_by: user?.id ?? null })
     .eq('id', photoId)
+    .eq('account_id', account.id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath(`/objects/${photo.object_id}`)
+  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
+  return {}
+}
+
+/** Restores a soft-deleted photo, putting it back in its original sort position. */
+export async function restorePhoto(photoId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const account = await getOrCreateAccount()
+
+  const { data: photo } = await supabase
+    .from('object_photos')
+    .select('id, object_id, wood_objects(public_slug)')
+    .eq('id', photoId)
+    .eq('account_id', account.id)
+    .not('deleted_at', 'is', null)
+    .single()
+
+  if (!photo) return { error: 'Deleted photo not found.' }
+
+  const { error } = await supabase
+    .from('object_photos')
+    .update({ deleted_at: null, deleted_by: null })
+    .eq('id', photoId)
+    .eq('account_id', account.id)
 
   if (error) return { error: error.message }
 
@@ -93,6 +131,7 @@ export async function updatePhotoCaption(
     .select('id, object_id, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
+    .is('deleted_at', null)
     .single()
 
   if (!photo) return { error: 'Photo not found.' }
@@ -118,6 +157,7 @@ export async function togglePhotoVisibility(photoId: string): Promise<{ error?: 
     .select('id, is_public, object_id, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
+    .is('deleted_at', null)
     .single()
 
   if (!photo) return { error: 'Photo not found.' }
@@ -146,6 +186,7 @@ export async function movePhoto(
     .select('id, object_id, sort_order, wood_objects(public_slug)')
     .eq('id', photoId)
     .eq('account_id', account.id)
+    .is('deleted_at', null)
     .single()
 
   if (!photo) return { error: 'Photo not found.' }
@@ -155,6 +196,7 @@ export async function movePhoto(
     .select('id, sort_order')
     .eq('object_id', photo.object_id)
     .eq('account_id', account.id)
+    .is('deleted_at', null)
 
   if (!all) return {}
 

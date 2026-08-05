@@ -252,7 +252,10 @@ export async function deleteObject(id: string): Promise<{ error?: string }> {
     return { error: `This object has children (${ids}). Delete or re-parent them first.` }
   }
 
-  // Remove photo storage files (best-effort — DB records cascade automatically)
+  // Remove photo storage files (best-effort — DB records cascade automatically).
+  // Deliberately NOT filtered by deleted_at: object deletion is the hard path,
+  // so soft-deleted photos must have their storage files swept too or they
+  // orphan permanently.
   const { data: photos } = await supabase
     .from('object_photos')
     .select('storage_path')

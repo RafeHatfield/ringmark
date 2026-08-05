@@ -37,7 +37,10 @@ export default function AuthForm() {
     const { error: oauthErr } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // `next` has to survive the round trip or every Google sign-in lands on
+        // /workshop, which breaks any deep link that required auth — including
+        // the OAuth consent screen, where dropping it loses the authorization_id.
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
     if (oauthErr) setError(oauthErr.message)
