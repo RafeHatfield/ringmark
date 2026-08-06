@@ -54,6 +54,12 @@ export const WoodObjectSchema = z
     location_text: z.string().nullable(),
     private_notes: z.string().nullable(),
     is_published: z.boolean(),
+    price_cents: z.number().int().nonnegative().nullable().optional().openapi({
+      example: 12000,
+      description:
+        'Optional asking price in cents. Informational only — Ringmark has no ' +
+        'checkout. Never appears on public pages.',
+    }),
     parent_id: z.string().uuid().nullable(),
     root_id: z.string().uuid().nullable(),
     lineage_confidence: lineageConfidenceEnum.nullable(),
@@ -106,6 +112,10 @@ export const CreateObjectSchema = z
       .optional()
       .openapi({ description: 'Private — never shown on public page' }),
     private_notes: z.string().optional(),
+    price_cents: z.number().int().nonnegative().nullable().optional().openapi({
+      example: 12000,
+      description: 'Optional asking price in cents',
+    }),
   })
   .openapi('CreateObject')
 
@@ -123,6 +133,10 @@ export const PatchObjectSchema = z
     public_care: z.string().optional(),
     dimensions_text: z.string().optional(),
     finish: z.string().optional(),
+    price_cents: z.number().int().nonnegative().nullable().optional().openapi({
+      example: 12000,
+      description: 'Optional asking price in cents. Pass null to clear.',
+    }),
     is_published: z
       .boolean()
       .optional()
@@ -209,3 +223,140 @@ export const ErrorSchema = z
     error: z.string().openapi({ example: 'Object not found' }),
   })
   .openapi('Error')
+
+// ── Market Mode ───────────────────────────────────────────────────────────────
+//
+// Private feature: in-person selling events. Nothing here is ever exposed on a
+// public page, and no schema in this section may be reused in a public response.
+
+export const marketEventStatusEnum = z
+  .enum(['planning', 'active', 'completed', 'cancelled'])
+  .openapi({ description: 'Lifecycle state of a market event' })
+
+export const MarketEventSchema = z
+  .object({
+    id: z.string().uuid(),
+    account_id: z.string().uuid(),
+    name: z.string().openapi({ example: 'Lynn Valley Farmers Market' }),
+    event_date: z.string().nullable().openapi({
+      example: '2026-08-16',
+      description: 'ISO date. Nullable — a market can be planned before its date is fixed.',
+    }),
+    location_text: z.string().nullable(),
+    notes: z.string().nullable(),
+    status: marketEventStatusEnum,
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+  })
+  .openapi('MarketEvent')
+
+export const CreateMarketEventSchema = z
+  .object({
+    name: z.string().min(1).openapi({ example: 'Lynn Valley Farmers Market' }),
+    event_date: z.string().optional().openapi({ example: '2026-08-16' }),
+    location_text: z.string().optional(),
+    notes: z.string().optional(),
+  })
+  .openapi('CreateMarketEvent')
+
+export const PatchMarketEventSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    event_date: z.string().nullable().optional(),
+    location_text: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+    status: marketEventStatusEnum.optional(),
+  })
+  .openapi('PatchMarketEvent')
+
+/**
+ * A piece's appearance at one event, with display fields denormalized so a
+ * caller never needs a second round trip to render a market list.
+ */
+export const MarketEventItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    market_event_id: z.string().uuid(),
+    object_id: z.string().uuid(),
+    asking_price_cents: z.number().int().nonnegative().nullable(),
+    sold: z.boolean(),
+    sold_price_cents: z.number().int().nonnegative().nullable(),
+    sold_at: z.string().datetime().nullable(),
+    sort_order: z.number().int(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+    // Denormalized from wood_objects for display
+    workshop_id: z.string().openapi({ example: 'RH9-4' }),
+    title: z.string().nullable(),
+    public_title: z.string().nullable(),
+    species: z.string().nullable(),
+    thumbnail_url: z.string().nullable().openapi({
+      description: "Signed URL for the object's first photo, valid 1 hour",
+    }),
+  })
+  .openapi('MarketEventItem')
+
+export const AddMarketItemSchema = z
+  .object({
+    object_id: z.string().openapi({
+      example: 'RH9-4',
+      description: 'Workshop ID or UUID',
+    }),
+    asking_price_cents: z.number().int().nonnegative().nullable().optional().openapi({
+      description: "Defaults to the object's price_cents when omitted",
+    }),
+  })
+  .openapi('AddMarketItem')
+
+export const BulkAddMarketItemsSchema = z
+  .object({
+    object_ids: z.array(z.string()).min(1).max(100).openapi({
+      example: ['RH9-4', 'RH12', 'RH3-1'],
+      description: 'Workshop IDs or UUIDs',
+    }),
+  })
+  .openapi('BulkAddMarketItems')
+
+export const UpdateMarketItemSchema = z
+  .object({
+    asking_price_cents: z.number().int().nonnegative().nullable().optional(),
+    sort_order: z.number().int().optional(),
+  })
+  .openapi('UpdateMarketItem')
+
+export const MarkSoldSchema = z
+  .object({
+    sold_price_cents: z.number().int().nonnegative().optional().openapi({
+      description:
+        "Defaults to the item's asking_price_cents when omitted — sold at asking " +
+        'is the common case; pass a value for a haggled price.',
+    }),
+  })
+  .openapi('MarkSold')
+
+/** Computed server-side per request; never stored. */
+export const MarketEventTotalsSchema = z
+  .object({
+    item_count: z.number().int(),
+    sold_count: z.number().int(),
+    total_asking_cents: z.number().int(),
+    total_sold_cents: z.number().int(),
+  })
+  .openapi('MarketEventTotals')
+
+export const MarketEventDetailSchema = MarketEventSchema.extend({
+  items: z.array(MarketEventItemSchema),
+  totals: MarketEventTotalsSchema,
+}).openapi('MarketEventDetail')
+
+export const BulkAddResultSchema = z
+  .object({
+    added: z.array(MarketEventItemSchema),
+    skipped: z.array(
+      z.object({
+        id: z.string(),
+        reason: z.string().openapi({ example: 'Already on this event' }),
+      })
+    ),
+  })
+  .openapi('BulkAddResult')

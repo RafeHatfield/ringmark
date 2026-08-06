@@ -71,6 +71,8 @@ export type WoodObject = {
   public_story: string | null
   public_care: string | null
   is_published: boolean
+  /** Optional asking price in cents. Never selected in public/anon queries. */
+  price_cents: number | null
   created_at: string
   updated_at: string
 }
@@ -98,6 +100,7 @@ export type WoodObjectInsert = {
   public_story?: string | null
   public_care?: string | null
   is_published?: boolean
+  price_cents?: number | null
   created_at?: string
   updated_at?: string
 }
@@ -143,6 +146,72 @@ export type AccountMember = {
   role: 'owner' | 'member'
   joined_at: string
 }
+
+// ── Market Mode ───────────────────────────────────────────────────────────────
+
+export type MarketEventStatus = 'planning' | 'active' | 'completed' | 'cancelled'
+
+export type MarketEvent = {
+  id: string
+  account_id: string
+  name: string
+  /** Nullable: a market can be planned before its date is fixed. */
+  event_date: string | null
+  location_text: string | null
+  notes: string | null
+  status: MarketEventStatus
+  created_at: string
+  updated_at: string
+}
+
+export type MarketEventInsert = {
+  account_id: string
+  name: string
+  id?: string
+  event_date?: string | null
+  location_text?: string | null
+  notes?: string | null
+  status?: MarketEventStatus
+  created_at?: string
+  updated_at?: string
+}
+
+export type MarketEventUpdate = Partial<MarketEventInsert>
+
+/**
+ * One appearance of one piece at one event. Many-to-many by design: the same
+ * piece can go to several markets before it sells, each with its own asking
+ * price and sold state.
+ */
+export type MarketEventItem = {
+  id: string
+  account_id: string
+  market_event_id: string
+  object_id: string
+  asking_price_cents: number | null
+  sold: boolean
+  sold_price_cents: number | null
+  sold_at: string | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export type MarketEventItemInsert = {
+  account_id: string
+  market_event_id: string
+  object_id: string
+  id?: string
+  asking_price_cents?: number | null
+  sold?: boolean
+  sold_price_cents?: number | null
+  sold_at?: string | null
+  sort_order?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export type MarketEventItemUpdate = Partial<MarketEventItemInsert>
 
 export type ApiKey = {
   id: string
@@ -228,6 +297,41 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: 'object_photos_object_id_fkey'
+            columns: ['object_id']
+            isOneToOne: false
+            referencedRelation: 'wood_objects'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      market_events: {
+        Row: MarketEvent
+        Insert: MarketEventInsert
+        Update: MarketEventUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'market_events_account_id_fkey'
+            columns: ['account_id']
+            isOneToOne: false
+            referencedRelation: 'accounts'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      market_event_items: {
+        Row: MarketEventItem
+        Insert: MarketEventItemInsert
+        Update: MarketEventItemUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'market_event_items_market_event_id_fkey'
+            columns: ['market_event_id']
+            isOneToOne: false
+            referencedRelation: 'market_events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'market_event_items_object_id_fkey'
             columns: ['object_id']
             isOneToOne: false
             referencedRelation: 'wood_objects'
