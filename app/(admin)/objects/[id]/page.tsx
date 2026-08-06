@@ -7,6 +7,7 @@ import { StatusChanger } from '@/components/status-changer'
 import { PhotoSection, type PhotoData } from '@/components/photo-section'
 import { DeleteObjectButton } from '@/components/delete-object-button'
 import { signPathsBatch } from '@/lib/signed-urls'
+import { formatPrice } from '@/lib/money'
 
 export default async function ObjectDetailPage({
   params,
@@ -99,6 +100,11 @@ export default async function ObjectDetailPage({
             {objectTypeLabel}
           </span>
           <StatusChanger objectId={id} status={object.status} />
+          {object.price_cents != null && (
+            <span className="text-xs px-2 py-0.5 rounded-full border text-bark font-medium">
+              {formatPrice(object.price_cents)}
+            </span>
+          )}
           {object.is_published && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
               Published

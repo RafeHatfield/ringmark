@@ -128,6 +128,7 @@ Create a new root-level workshop object. Workshop ID and public slug are auto-ge
 | `status` | string | no | Defaults to `acquired` |
 | `location_text` | string | no | Private — never shown on public page |
 | `private_notes` | string | no | Private notes |
+| `price_cents` | integer \| null | no | Optional asking price in cents. Never exposed on public pages |
 
 **Response (201):** Full `WoodObject` (see schema below).
 
@@ -185,6 +186,7 @@ Set `is_published: true` to publish; `false` to unpublish.
 | `public_care` | string | Care instructions |
 | `dimensions_text` | string | e.g. `12" × 4"` |
 | `finish` | string | e.g. `Walnut oil` |
+| `price_cents` | integer \| null | Optional asking price in cents. Pass `null` to clear. Never exposed on public pages |
 | `is_published` | boolean | `true` to publish, `false` to unpublish |
 
 **Response (200):** Updated full `WoodObject`.
@@ -323,6 +325,390 @@ curl -X POST http://localhost:3000/api/v1/objects/RH1/children \
 
 ---
 
+Market events are private, in-person selling events (craft markets, shows) —
+which pieces you took, what you priced them at, and which sold. Nothing under
+this section, and no `price_cents` value anywhere, is ever selected in a
+public or anon-reachable query; none of it appears on `/p/[slug]`, the maker
+page, their `opengraph-image` routes, or `sitemap.ts`. A piece can be added to
+a market event regardless of its `status` or publish state — a market piece
+does not need a public Ringmark page. `id` in these paths is always the market
+event's own UUID (market events have no workshop-ID-style human identifier);
+`object_id` in request bodies accepts a workshop ID or a UUID, resolved the
+same way as everywhere else in the API.
+
+---
+
+### GET /api/v1/market-events
+
+List the account's market events, most recent first.
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status` | string | Filter by status (`planning`, `active`, `completed`, `cancelled`) |
+
+**Response (200):**
+
+```json
+{
+  "data": [
+    {
+      "id": "b1f6b0a2-9e3e-4b7d-8f2a-1c9d6e4a7f21",
+      "account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "name": "Lynn Valley Farmers Market",
+      "event_date": "2026-08-16",
+      "location_text": "Lynn Valley Village, North Vancouver",
+      "notes": "Bring the folding table",
+      "status": "planning",
+      "created_at": "2026-08-04T10:00:00.000Z",
+      "updated_at": "2026-08-04T10:00:00.000Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Example:**
+
+```bash
+curl "http://localhost:3000/api/v1/market-events?status=planning" \
+  -H "Authorization: Bearer $RINGMARK_API_KEY"
+```
+
+---
+
+### POST /api/v1/market-events
+
+Create a market event. Always starts in `planning` status — `status` is not
+accepted on create, only on `PATCH`. `event_date` is optional; a market can be
+planned before its date is fixed.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | |
+| `event_date` | string | no | ISO date, e.g. `2026-08-16` |
+| `location_text` | string | no | |
+| `notes` | string | no | |
+
+**Response (201):** Full `MarketEvent`.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/market-events \
+  -H "Authorization: Bearer $RINGMARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Lynn Valley Farmers Market", "event_date": "2026-08-16"}'
+```
+
+---
+
+### GET /api/v1/market-events/:id
+
+Fetch a market event with every item on it and server-computed totals — one
+round trip, no follow-up fetch needed to render a market list.
+
+**Path parameter:** `id` — market event UUID
+
+**Response (200):** `MarketEventDetail` — the `MarketEvent` fields plus
+`items` (each a `MarketEventItem`, denormalized with `workshop_id`, `title`,
+`public_title`, `species`, and a 1-hour signed `thumbnail_url` so the caller
+never needs a second fetch) and `totals` (computed server-side on every
+request, never stored):
+
+```json
+{
+  "id": "b1f6b0a2-9e3e-4b7d-8f2a-1c9d6e4a7f21",
+  "account_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "name": "Lynn Valley Farmers Market",
+  "event_date": "2026-08-16",
+  "location_text": "Lynn Valley Village, North Vancouver",
+  "notes": "Bring the folding table",
+  "status": "planning",
+  "created_at": "2026-08-04T10:00:00.000Z",
+  "updated_at": "2026-08-04T10:00:00.000Z",
+  "items": [
+    {
+      "id": "d4e6f0a1-2b3c-4d5e-8f9a-0b1c2d3e4f5a",
+      "market_event_id": "b1f6b0a2-9e3e-4b7d-8f2a-1c9d6e4a7f21",
+      "object_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "asking_price_cents": 12000,
+      "sold": false,
+      "sold_price_cents": null,
+      "sold_at": null,
+      "sort_order": 0,
+      "created_at": "2026-08-04T10:05:00.000Z",
+      "updated_at": "2026-08-04T10:05:00.000Z",
+      "workshop_id": "RH9-4",
+      "title": "Maple Bowl",
+      "public_title": "Bigleaf Maple Bowl",
+      "species": "Bigleaf Maple",
+      "thumbnail_url": "https://.../object-photos/signed?..."
+    }
+  ],
+  "totals": {
+    "item_count": 1,
+    "sold_count": 0,
+    "total_asking_cents": 12000,
+    "total_sold_cents": 0
+  }
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:3000/api/v1/market-events/$EVENT_ID \
+  -H "Authorization: Bearer $RINGMARK_API_KEY"
+```
+
+---
+
+### PATCH /api/v1/market-events/:id
+
+Partial update — only include the fields you want to change. Use `status` to
+transition the event through `planning` → `active` → `completed` (or
+`cancelled`).
+
+**Path parameter:** `id` — market event UUID
+
+**Request body (all fields optional):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | |
+| `event_date` | string \| null | |
+| `location_text` | string \| null | |
+| `notes` | string \| null | |
+| `status` | string | `planning`, `active`, `completed`, or `cancelled` |
+
+**Response (200):** Updated full `MarketEvent`.
+
+**Example:**
+
+```bash
+curl -X PATCH http://localhost:3000/api/v1/market-events/$EVENT_ID \
+  -H "Authorization: Bearer $RINGMARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "active"}'
+```
+
+---
+
+### DELETE /api/v1/market-events/:id
+
+Delete a market event and its items. Items cascade at the database level — no
+manual cleanup, unlike object deletion (no photos, no storage involved here).
+The pieces themselves are untouched; this only removes the record of them
+having been taken to this market.
+
+**Path parameter:** `id` — market event UUID
+
+**Response (204):** No content.
+
+**Example:**
+
+```bash
+curl -X DELETE http://localhost:3000/api/v1/market-events/$EVENT_ID \
+  -H "Authorization: Bearer $RINGMARK_API_KEY"
+```
+
+---
+
+### POST /api/v1/market-events/:id/items
+
+Add a single piece to a market event.
+
+Any object can be added regardless of its `status` or publish state — a
+market piece does not need a public Ringmark page. `asking_price_cents`
+defaults to the object's own `price_cents` when omitted.
+
+**Path parameter:** `id` — market event UUID
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `object_id` | string | yes | Workshop ID or UUID |
+| `asking_price_cents` | integer \| null | no | Defaults to the object's `price_cents` |
+
+**Response (201):** Full `MarketEventItem`.
+
+**Error responses:** `400` validation error, `404` event or object not found, `409` the piece is already on this event.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/market-events/$EVENT_ID/items \
+  -H "Authorization: Bearer $RINGMARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"object_id": "RH9-4", "asking_price_cents": 12000}'
+```
+
+---
+
+### POST /api/v1/market-events/:id/items/bulk
+
+Add several pieces at once — the "go through and select everything you want
+to take" path.
+
+Pieces that don't resolve to an object in this account, or are already on
+this event (the `unique (market_event_id, object_id)` constraint), are
+**skipped, not failed** — the rest of the batch still adds. Response status is
+`200`, not `201`: this isn't a single created resource.
+
+**Path parameter:** `id` — market event UUID
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `object_ids` | string[] | yes | 1–100 workshop IDs or UUIDs |
+
+**Response (200):**
+
+```json
+{
+  "added": [
+    {
+      "id": "d4e6f0a1-2b3c-4d5e-8f9a-0b1c2d3e4f5a",
+      "market_event_id": "b1f6b0a2-9e3e-4b7d-8f2a-1c9d6e4a7f21",
+      "object_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "asking_price_cents": 12000,
+      "sold": false,
+      "sold_price_cents": null,
+      "sold_at": null,
+      "sort_order": 0,
+      "created_at": "2026-08-04T10:05:00.000Z",
+      "updated_at": "2026-08-04T10:05:00.000Z",
+      "workshop_id": "RH9-4",
+      "title": "Maple Bowl",
+      "public_title": "Bigleaf Maple Bowl",
+      "species": "Bigleaf Maple",
+      "thumbnail_url": "https://.../object-photos/signed?..."
+    }
+  ],
+  "skipped": [
+    { "id": "RH2", "reason": "Already on this event" }
+  ]
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/market-events/$EVENT_ID/items/bulk \
+  -H "Authorization: Bearer $RINGMARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"object_ids": ["RH9-4", "RH12", "RH3-1"]}'
+```
+
+---
+
+### PATCH /api/v1/market-events/:id/items/:itemId
+
+Change the asking price or sort order for this piece **at this event only** —
+it does not touch the object's own `price_cents`, or any other event the same
+piece may also be on.
+
+**Path parameters:** `id` — market event UUID, `itemId` — market event item UUID
+
+**Request body (all fields optional):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `asking_price_cents` | integer \| null | |
+| `sort_order` | integer | |
+
+**Response (200):** Updated full `MarketEventItem`.
+
+**Example:**
+
+```bash
+curl -X PATCH http://localhost:3000/api/v1/market-events/$EVENT_ID/items/$ITEM_ID \
+  -H "Authorization: Bearer $RINGMARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"asking_price_cents": 9500}'
+```
+
+---
+
+### DELETE /api/v1/market-events/:id/items/:itemId
+
+Remove a piece from a market event. Removes the item only — the piece itself,
+and its `price_cents`, are untouched.
+
+**Path parameters:** `id` — market event UUID, `itemId` — market event item UUID
+
+**Response (204):** No content.
+
+**Example:**
+
+```bash
+curl -X DELETE http://localhost:3000/api/v1/market-events/$EVENT_ID/items/$ITEM_ID \
+  -H "Authorization: Bearer $RINGMARK_API_KEY"
+```
+
+---
+
+### POST /api/v1/market-events/:id/items/:itemId/mark-sold
+
+Mark a piece sold at this market.
+
+Sets `sold: true`, `sold_price_cents` (from the body, or defaulting to the
+item's `asking_price_cents` — "sold at asking" is the common case, override
+for a haggled price), and `sold_at`. **This is the one place Market Mode
+reaches outside its own tables:** in the same request, it also sets the
+underlying object's `status` to `sold`, scoped to the account. It's done as an
+explicit application-code update, not a DB trigger — matching how this
+codebase keeps cross-table orchestration in application code elsewhere (e.g.
+the `root_id` cascade on re-parent in `actions/objects.ts`).
+
+**Path parameters:** `id` — market event UUID, `itemId` — market event item UUID
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sold_price_cents` | integer | no | Defaults to the item's `asking_price_cents` |
+
+**Response (200):** Updated full `MarketEventItem`.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/market-events/$EVENT_ID/items/$ITEM_ID/mark-sold \
+  -H "Authorization: Bearer $RINGMARK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+---
+
+### POST /api/v1/market-events/:id/items/:itemId/unmark-sold
+
+Undo a sale. Clears `sold`, `sold_price_cents`, and `sold_at`, and reverts the
+underlying object's `status` to `for_sale` — **unconditionally, not to
+whatever status it held before.** A piece taken to a market was almost
+certainly `for_sale` beforehand, and this is a deliberate design choice: it
+avoids a redundant "previous status" column just to support the revert.
+
+**Path parameters:** `id` — market event UUID, `itemId` — market event item UUID
+
+**Response (200):** Updated full `MarketEventItem`.
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:3000/api/v1/market-events/$EVENT_ID/items/$ITEM_ID/unmark-sold \
+  -H "Authorization: Bearer $RINGMARK_API_KEY"
+```
+
+---
+
 ## Error Responses
 
 All error responses use this shape:
@@ -365,6 +751,7 @@ Full object shape returned by GET (single), POST, and PATCH responses:
 | `location_text` | string \| null | Private — not shown on public page |
 | `private_notes` | string \| null | Private — not shown on public page |
 | `is_published` | boolean | Whether the public story is live |
+| `price_cents` | integer \| null | Optional asking price in cents. Informational only — never selected in any public/anon-reachable query |
 | `parent_id` | UUID \| null | Direct parent |
 | `root_id` | UUID \| null | Root ancestor |
 | `lineage_confidence` | string \| null | `exact`, `probable`, `batch_level`, `unknown` |

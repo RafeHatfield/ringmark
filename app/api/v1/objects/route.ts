@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     return Response.json({ error: result.error.issues[0].message }, { status: 400 })
   }
 
-  const { object_type, workshop_id, title, species, status, location_text, private_notes } = result.data
+  const { object_type, workshop_id, title, species, status, location_text, private_notes, price_cents } = result.data
 
   // Resolve workshop ID
   let wid: string
@@ -123,6 +123,7 @@ export async function POST(request: Request) {
       status: status as ObjectStatus,
       location_text: location_text?.trim() || null,
       private_notes: private_notes?.trim() || null,
+      price_cents: price_cents ?? null,
     })
     .select('id')
     .single()

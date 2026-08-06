@@ -23,17 +23,27 @@ const TEST_BASE = 'http://test.local/api/v1'
 
 const EXPECTED_TOOLS = [
   'add_child',
+  'add_market_items',
+  'create_market_event',
   'create_object',
+  'delete_market_event',
   'delete_object',
   'delete_photo',
   'get_lineage',
+  'get_market_event',
   'get_object',
+  'list_market_events',
   'list_objects',
   'list_photos',
+  'mark_item_sold',
   'publish_object',
+  'remove_market_item',
   'restore_photo',
   'save_story',
   'search_objects',
+  'unmark_item_sold',
+  'update_market_event',
+  'update_market_item_price',
   'update_object',
   'update_photo',
   'upload_photo',
@@ -72,7 +82,7 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ringmark MCP server — manifest', () => {
-  it('tools/list returns all 15 expected tools', async () => {
+  it('tools/list returns all 25 expected tools', async () => {
     const { client, cleanup } = await connectPair()
     try {
       const { tools } = await client.listTools()
@@ -125,9 +135,15 @@ describe('ringmark MCP server — manifest', () => {
 })
 
 describe('ringmark MCP server — tool annotations', () => {
-  const READ_ONLY = ['list_objects', 'search_objects', 'get_object', 'get_lineage', 'list_photos']
-  const IDEMPOTENT = ['update_object', 'update_photo', 'save_story', 'restore_photo', 'publish_object']
-  const DESTRUCTIVE = ['delete_object', 'delete_photo']
+  const READ_ONLY = [
+    'list_objects', 'search_objects', 'get_object', 'get_lineage', 'list_photos',
+    'list_market_events', 'get_market_event',
+  ]
+  const IDEMPOTENT = [
+    'update_object', 'update_photo', 'save_story', 'restore_photo', 'publish_object',
+    'update_market_event', 'update_market_item_price', 'mark_item_sold', 'unmark_item_sold',
+  ]
+  const DESTRUCTIVE = ['delete_object', 'delete_photo', 'delete_market_event', 'remove_market_item']
 
   it('read-only tools are annotated readOnlyHint', async () => {
     const { client, cleanup } = await connectPair()
@@ -147,7 +163,11 @@ describe('ringmark MCP server — tool annotations', () => {
     const { client, cleanup } = await connectPair()
     try {
       const { tools } = await client.listTools()
-      for (const name of [...IDEMPOTENT, ...DESTRUCTIVE, 'create_object', 'add_child', 'upload_photo']) {
+      for (const name of [
+        ...IDEMPOTENT, ...DESTRUCTIVE,
+        'create_object', 'add_child', 'upload_photo',
+        'create_market_event', 'add_market_items',
+      ]) {
         const tool = tools.find(t => t.name === name)
         assert.ok(tool, `${name} not found`)
         assert.notEqual(
@@ -604,6 +624,471 @@ describe('ringmark MCP server — get_lineage', () => {
     try {
       const result = await client.callTool({ name: 'get_lineage', arguments: { id: 'NOPE' } })
       assert.ok(result.isError, 'expected isError: true for a missing object')
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — create_market_event + list_market_events', () => {
+  it('create_market_event POSTs the name and reports the new event', async () => {
+    let capturedUrl = ''
+    let capturedBody: Record<string, unknown> = {}
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedBody = JSON.parse(String(init?.body ?? '{}'))
+      return Response.json(
+        { id: 'evt-1', name: 'Lynn Valley Farmers Market', status: 'planning' },
+        { status: 201 }
+      )
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'create_market_event',
+        arguments: { name: 'Lynn Valley Farmers Market', event_date: '2026-08-16' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.includes('/market-events'), `wrong URL: ${capturedUrl}`)
+      assert.equal(capturedBody.name, 'Lynn Valley Farmers Market')
+      assert.equal(capturedBody.event_date, '2026-08-16')
+      const text = textOf(result)
+      assert.ok(text.includes('evt-1'), `expected event ID, got: ${text}`)
+      assert.ok(text.includes('planning'), `expected status, got: ${text}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('create_market_event surfaces an API error', async () => {
+    const restore = mockFetch(Response.json({ error: 'Something went wrong' }, { status: 500 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'create_market_event',
+        arguments: { name: 'Broken Market' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 500 response')
+      assert.ok(textOf(result).includes('Something went wrong'), `unexpected message: ${textOf(result)}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('list_market_events passes status through as a query param', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return Response.json({
+        data: [{ id: 'evt-1', name: 'Lynn Valley Farmers Market', status: 'active' }],
+        total: 1,
+      })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'list_market_events', arguments: { status: 'active' } })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.includes('status=active'), `expected status query param, got: ${capturedUrl}`)
+      assert.ok(textOf(result).includes('Lynn Valley Farmers Market'), `expected event name, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('list_market_events surfaces an API error', async () => {
+    const restore = mockFetch(Response.json({ error: 'Unauthorized' }, { status: 401 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'list_market_events', arguments: {} })
+      assert.ok(result.isError, 'expected isError: true for a 401 response')
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — get_market_event', () => {
+  it('formats items and totals as readable text, including each item_id', async () => {
+    const restore = mockFetch(
+      Response.json({
+        id: 'evt-1',
+        name: 'Lynn Valley Farmers Market',
+        status: 'active',
+        event_date: '2026-08-16',
+        location_text: 'Lynn Valley Village',
+        items: [
+          { id: 'item-1', workshop_id: 'RH9-4', title: 'Maple Bowl', asking_price_cents: 12000, sold: false, sold_price_cents: null },
+          { id: 'item-2', workshop_id: 'RH3', title: null, asking_price_cents: 8000, sold: true, sold_price_cents: 7500 },
+        ],
+        totals: { item_count: 2, sold_count: 1, total_asking_cents: 20000, total_sold_cents: 7500 },
+      })
+    )
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'get_market_event', arguments: { id: 'evt-1' } })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      const text = textOf(result)
+      assert.ok(text.includes('Lynn Valley Farmers Market'), `expected event name, got: ${text}`)
+      assert.ok(text.includes('2 item(s), 1 sold'), `expected totals line, got: ${text}`)
+      assert.ok(text.includes('$200.00'), `expected asking total, got: ${text}`)
+      assert.ok(text.includes('$75.00'), `expected sold total, got: ${text}`)
+      assert.ok(text.includes('RH9-4'), `expected item workshop ID, got: ${text}`)
+      assert.ok(text.includes('item_id: item-1'), `expected item_id, got: ${text}`)
+      assert.ok(text.includes('SOLD'), `expected sold marker, got: ${text}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('returns a not-found message (no error) when the event does not exist', async () => {
+    const restore = mockFetch(Response.json({ error: 'Market event not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'get_market_event', arguments: { id: 'nope' } })
+      assert.ok(!result.isError, 'get_market_event should NOT set isError for a not-found ID')
+      assert.ok(textOf(result).includes('No market event found'), `expected not-found message, got: ${textOf(result)}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — update_market_event + delete_market_event', () => {
+  it('update_market_event PATCHes only the provided fields', async () => {
+    let capturedMethod = ''
+    let capturedBody: Record<string, unknown> = {}
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedMethod = init?.method ?? ''
+      capturedBody = JSON.parse(String(init?.body ?? '{}'))
+      return Response.json({ id: 'evt-1', name: 'Lynn Valley Farmers Market', status: 'active' })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'update_market_event',
+        arguments: { id: 'evt-1', status: 'active' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.equal(capturedMethod, 'PATCH')
+      assert.deepEqual(capturedBody, { status: 'active' })
+      assert.ok(textOf(result).includes('active'), `expected updated status, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('update_market_event surfaces an API error', async () => {
+    const restore = mockFetch(Response.json({ error: 'Market event not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'update_market_event',
+        arguments: { id: 'nope', name: 'New name' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 404 response')
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('delete_market_event sends DELETE to the correct URL and reports success', async () => {
+    let capturedUrl = ''
+    let capturedMethod = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedMethod = init?.method ?? ''
+      return new Response(null, { status: 204 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'delete_market_event', arguments: { id: 'evt-1' } })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.equal(capturedMethod, 'DELETE')
+      assert.ok(capturedUrl.includes('/market-events/evt-1'), `wrong URL: ${capturedUrl}`)
+      assert.ok(textOf(result).includes('Deleted market event'), `expected confirmation, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('delete_market_event surfaces an API error', async () => {
+    const restore = mockFetch(Response.json({ error: 'Market event not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({ name: 'delete_market_event', arguments: { id: 'nope' } })
+      assert.ok(result.isError, 'expected isError: true for a 404 response')
+      assert.ok(textOf(result).includes('Market event not found'), `expected error message, got: ${textOf(result)}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — add_market_items + remove_market_item', () => {
+  it('add_market_items posts object_ids in bulk and reports added/skipped', async () => {
+    let capturedUrl = ''
+    let capturedBody: Record<string, unknown> = {}
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedBody = JSON.parse(String(init?.body ?? '{}'))
+      return Response.json({
+        added: [{ id: 'item-1', workshop_id: 'RH9-4' }],
+        skipped: [{ id: 'RH3', reason: 'Already on this event' }],
+      })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'add_market_items',
+        arguments: { market_event_id: 'evt-1', object_ids: ['RH9-4', 'RH3'] },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.includes('/market-events/evt-1/items/bulk'), `wrong URL: ${capturedUrl}`)
+      assert.deepEqual(capturedBody.object_ids, ['RH9-4', 'RH3'])
+      const text = textOf(result)
+      assert.ok(text.includes('Added 1 of 2'), `expected added count, got: ${text}`)
+      assert.ok(text.includes('RH9-4'), `expected added workshop ID, got: ${text}`)
+      assert.ok(text.includes('Already on this event'), `expected skip reason, got: ${text}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('add_market_items surfaces an API error', async () => {
+    const restore = mockFetch(Response.json({ error: 'Market event not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'add_market_items',
+        arguments: { market_event_id: 'nope', object_ids: ['RH1'] },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 404 response')
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('remove_market_item sends DELETE to the correct URL and reports success', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return new Response(null, { status: 204 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'remove_market_item',
+        arguments: { market_event_id: 'evt-1', item_id: 'item-1' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.includes('/market-events/evt-1/items/item-1'), `wrong URL: ${capturedUrl}`)
+      assert.ok(textOf(result).includes('Removed'), `expected confirmation, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('remove_market_item surfaces an API error (e.g. item not found)', async () => {
+    const restore = mockFetch(Response.json({ error: 'Item not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'remove_market_item',
+        arguments: { market_event_id: 'evt-1', item_id: 'nope' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 404 item')
+      assert.ok(textOf(result).includes('Item not found'), `expected error message, got: ${textOf(result)}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — update_market_item_price', () => {
+  it('sets a new asking price and reports it formatted as dollars', async () => {
+    let capturedUrl = ''
+    let capturedBody: Record<string, unknown> = {}
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedBody = JSON.parse(String(init?.body ?? '{}'))
+      return Response.json({ id: 'item-1', workshop_id: 'RH9-4', asking_price_cents: 12000 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'update_market_item_price',
+        arguments: { market_event_id: 'evt-1', item_id: 'item-1', asking_price_cents: 12000 },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.includes('/market-events/evt-1/items/item-1'), `wrong URL: ${capturedUrl}`)
+      assert.equal(capturedBody.asking_price_cents, 12000)
+      assert.ok(textOf(result).includes('$120.00'), `expected formatted price, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('passing null clears the price', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    const original = global.fetch
+    global.fetch = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}'))
+      return Response.json({ id: 'item-1', workshop_id: 'RH9-4', asking_price_cents: null })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'update_market_item_price',
+        arguments: { market_event_id: 'evt-1', item_id: 'item-1', asking_price_cents: null },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.equal(capturedBody.asking_price_cents, null)
+      assert.ok(textOf(result).includes('cleared'), `expected cleared confirmation, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('surfaces an API error (e.g. item not found)', async () => {
+    const restore = mockFetch(Response.json({ error: 'Item not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'update_market_item_price',
+        arguments: { market_event_id: 'evt-1', item_id: 'nope', asking_price_cents: 5000 },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 404 item')
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — mark_item_sold + unmark_item_sold', () => {
+  it('mark_item_sold posts to mark-sold and reports the object status change', async () => {
+    let capturedUrl = ''
+    let capturedMethod = ''
+    let capturedBody: Record<string, unknown> = {}
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedMethod = init?.method ?? ''
+      capturedBody = JSON.parse(String(init?.body ?? '{}'))
+      return Response.json({ id: 'item-1', workshop_id: 'RH9-4', sold_price_cents: 15000 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'mark_item_sold',
+        arguments: { market_event_id: 'evt-1', item_id: 'item-1', sold_price_cents: 15000 },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.equal(capturedMethod, 'POST')
+      assert.ok(capturedUrl.includes('/market-events/evt-1/items/item-1/mark-sold'), `wrong URL: ${capturedUrl}`)
+      assert.equal(capturedBody.sold_price_cents, 15000)
+      const text = textOf(result)
+      assert.ok(text.includes('$150.00'), `expected formatted sold price, got: ${text}`)
+      assert.ok(text.includes('status set to sold'), `expected status-change confirmation, got: ${text}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('mark_item_sold omits sold_price_cents from the request when not provided (server defaults to asking price)', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    const original = global.fetch
+    global.fetch = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}'))
+      return Response.json({ id: 'item-1', workshop_id: 'RH9-4', sold_price_cents: 12000 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      await client.callTool({
+        name: 'mark_item_sold',
+        arguments: { market_event_id: 'evt-1', item_id: 'item-1' },
+      })
+      assert.ok(!('sold_price_cents' in capturedBody), `expected no sold_price_cents in body, got: ${JSON.stringify(capturedBody)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('mark_item_sold surfaces an API error (e.g. item not found)', async () => {
+    const restore = mockFetch(Response.json({ error: 'Item not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'mark_item_sold',
+        arguments: { market_event_id: 'evt-1', item_id: 'nope' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 404 item')
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('unmark_item_sold posts to unmark-sold and reports the object status reverting', async () => {
+    let capturedUrl = ''
+    let capturedMethod = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedMethod = init?.method ?? ''
+      return Response.json({ id: 'item-1', workshop_id: 'RH9-4' })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'unmark_item_sold',
+        arguments: { market_event_id: 'evt-1', item_id: 'item-1' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.equal(capturedMethod, 'POST')
+      assert.ok(capturedUrl.includes('/market-events/evt-1/items/item-1/unmark-sold'), `wrong URL: ${capturedUrl}`)
+      assert.ok(textOf(result).includes('reverted to for_sale'), `expected status-revert confirmation, got: ${textOf(result)}`)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('unmark_item_sold surfaces an API error (e.g. item not found)', async () => {
+    const restore = mockFetch(Response.json({ error: 'Item not found' }, { status: 404 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'unmark_item_sold',
+        arguments: { market_event_id: 'evt-1', item_id: 'nope' },
+      })
+      assert.ok(result.isError, 'expected isError: true for a 404 item')
     } finally {
       restore()
       await cleanup()

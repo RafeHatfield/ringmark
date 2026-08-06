@@ -181,6 +181,15 @@ test('tools/list returns the full ringmark tool set', async ({ request }) => {
   // Soft-delete companion — a delete tool without a restore tool is just a
   // slower delete
   expect(names).toContain('restore_photo')
+  // Market Mode — prep/after-the-fact tools (see mcp-inclusion note in the
+  // market-mode plan: the live "mark sold" moment is mobile-UI-first, not
+  // MCP-first, but these still ship for desk work and debrief)
+  expect(names).toContain('create_market_event')
+  expect(names).toContain('get_market_event')
+  expect(names).toContain('add_market_items')
+  expect(names).toContain('mark_item_sold')
+  expect(names).toContain('unmark_item_sold')
+  expect(names).toHaveLength(25)
 })
 
 // ── Remote destructive-tool guards ───────────────────────────────────────────
@@ -200,10 +209,13 @@ test('remote delete_object exposes no force parameter', async ({ request }) => {
 test('read-only tools carry readOnlyHint, delete tools carry destructiveHint', async ({ request }) => {
   const byName = new Map((await toolsList(request)).map(t => [t.name, t]))
 
-  for (const name of ['list_objects', 'search_objects', 'get_object', 'get_lineage', 'list_photos']) {
+  for (const name of [
+    'list_objects', 'search_objects', 'get_object', 'get_lineage', 'list_photos',
+    'list_market_events', 'get_market_event',
+  ]) {
     expect(byName.get(name)?.annotations?.readOnlyHint, name).toBe(true)
   }
-  for (const name of ['delete_object', 'delete_photo']) {
+  for (const name of ['delete_object', 'delete_photo', 'delete_market_event', 'remove_market_item']) {
     expect(byName.get(name)?.annotations?.destructiveHint, name).toBe(true)
     expect(byName.get(name)?.annotations?.readOnlyHint, name).not.toBe(true)
   }

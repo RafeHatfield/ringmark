@@ -203,9 +203,13 @@ export function registerTools(
               status: z.string().optional().describe('Initial status (default: acquired)'),
               location_text: z.string().optional().describe('Where the wood came from — stays private'),
               private_notes: z.string().optional().describe('Private workshop notes'),
+              price_cents: z.number().int().nonnegative().nullable().optional().describe(
+                'Optional asking price in cents (e.g. 12000 for $120.00). Informational only — ' +
+                'Ringmark has no checkout, and this never appears on a public page.'
+              ),
             }),
     },
-    async ({ object_type, workshop_id, title, species, status, location_text, private_notes }) => {
+    async ({ object_type, workshop_id, title, species, status, location_text, private_notes, price_cents }) => {
       const body: Record<string, unknown> = { object_type }
       if (workshop_id) body.workshop_id = workshop_id
       if (title) body.title = title
@@ -213,6 +217,7 @@ export function registerTools(
       if (status) body.status = status
       if (location_text) body.location_text = location_text
       if (private_notes) body.private_notes = private_notes
+      if (price_cents !== undefined) body.price_cents = price_cents
 
       const created = await api('POST', '/objects', body) as { workshop_id: string; id: string; public_slug: string }
       return {
@@ -270,7 +275,7 @@ export function registerTools(
     {
       description:
         'Update internal fields on an existing object. Only pass fields you want to change.\n\n' +
-        'This tool handles: object_type, status, title, species, location_text, private_notes, parent_id.\n' +
+        'This tool handles: object_type, status, title, species, location_text, private_notes, parent_id, price_cents.\n' +
         'It does NOT handle public-facing fields (public_title, public_story, public_notes, public_care) — ' +
         'use save_story for those. It does NOT toggle publish state — use publish_object for that.',
       annotations: { title: 'Update object', idempotentHint: true, ...CLOSED_WORLD },
@@ -288,9 +293,13 @@ export function registerTools(
               parent_id: z.string().nullable().optional().describe(
                 'Workshop ID or UUID of the new parent. Pass null to make this object a root with no parent.'
               ),
+              price_cents: z.number().int().nonnegative().nullable().optional().describe(
+                'Optional asking price in cents (e.g. 12000 for $120.00). Pass null to clear it. ' +
+                'Informational only — never appears on a public page.'
+              ),
             }),
     },
-    async ({ id, workshop_id, object_type, status, title, species, location_text, private_notes, parent_id }) => {
+    async ({ id, workshop_id, object_type, status, title, species, location_text, private_notes, parent_id, price_cents }) => {
       const body: Record<string, unknown> = {}
       if (workshop_id !== undefined) body.workshop_id = workshop_id
       if (object_type !== undefined) body.object_type = object_type
@@ -300,6 +309,7 @@ export function registerTools(
       if (location_text !== undefined) body.location_text = location_text
       if (private_notes !== undefined) body.private_notes = private_notes
       if (parent_id !== undefined) body.parent_id = parent_id
+      if (price_cents !== undefined) body.price_cents = price_cents
 
       const updated = await api('PATCH', `/objects/${encodeURIComponent(id)}`, body) as {
         workshop_id: string; id: string
@@ -591,6 +601,351 @@ export function registerTools(
     }
   )
 
+  // ── Market Events ─────────────────────────────────────────────────────────
+  //
+  // Fully private feature — in-person selling events (craft markets, shows).
+  // Prep and after-the-fact operations only: create an event, bulk-add pieces,
+  // reprice, review totals. mark_item_sold/unmark_item_sold exist for a
+  // debrief ("I sold three things, here's what"), not for the live sale —
+  // that stays in the mobile admin UI, which is built for a one-tap, no-modal
+  // interaction standing at a table. No hosted/local asymmetry: every table
+  // here is private, so there's nothing extra for a remote MCP call to risk.
+
+  // ── create_market_event ───────────────────────────────────────────────────
+
+  server.registerTool(
+    'create_market_event',
+    {
+      description:
+        'Create a new market event to plan for — a craft market, show, or other in-person ' +
+        'selling event. Starts in planning status; use update_market_event to move it to ' +
+        'active, completed, or cancelled.',
+      annotations: { title: 'Create market event', ...CLOSED_WORLD },
+      inputSchema: z.object({
+              name: z.string().min(1).describe('Event name (e.g. "Lynn Valley Farmers Market")'),
+              event_date: z.string().optional().describe(
+                'ISO date (e.g. 2026-08-16). Optional — a market can be planned before its date is fixed.'
+              ),
+              location_text: z.string().optional().describe('Where the event is'),
+              notes: z.string().optional().describe('Any planning notes'),
+            }),
+    },
+    async ({ name, event_date, location_text, notes }) => {
+      const body: Record<string, unknown> = { name }
+      if (event_date !== undefined) body.event_date = event_date
+      if (location_text !== undefined) body.location_text = location_text
+      if (notes !== undefined) body.notes = notes
+
+      const created = await api('POST', '/market-events', body) as { id: string; name: string; status: string }
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Created market event: ${created.name} (${created.id}), status: ${created.status}`,
+        }],
+      }
+    }
+  )
+
+  // ── list_market_events ────────────────────────────────────────────────────
+
+  server.registerTool(
+    'list_market_events',
+    {
+      description: 'List the account\'s market events, most recent first. Filter by status.',
+      annotations: { title: 'List market events', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              status: z.string().optional().describe(
+                'Filter by status: planning | active | completed | cancelled'
+              ),
+            }),
+    },
+    async ({ status }) => {
+      const params = new URLSearchParams()
+      if (status) params.set('status', status)
+      const data = await api('GET', `/market-events?${params}`)
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  // ── get_market_event ──────────────────────────────────────────────────────
+
+  server.registerTool(
+    'get_market_event',
+    {
+      description:
+        'Get a market event by ID: every item on it (workshop ID, title, species, asking ' +
+        'price, sold state, item_id) and server-computed totals (item count, sold count, ' +
+        'total asking value, total sold value). Use this to find an item\'s item_id before ' +
+        'calling remove_market_item, update_market_item_price, mark_item_sold, or unmark_item_sold.',
+      annotations: { title: 'Get market event', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({ id: z.string().describe('Market event UUID') }),
+    },
+    async ({ id }) => {
+      try {
+        const data = await api('GET', `/market-events/${encodeURIComponent(id)}`) as {
+          name: string; status: string; event_date: string | null; location_text: string | null
+          items: Array<{
+            id: string; workshop_id: string; title: string | null
+            asking_price_cents: number | null; sold: boolean; sold_price_cents: number | null
+          }>
+          totals: { item_count: number; sold_count: number; total_asking_cents: number; total_sold_cents: number }
+        }
+        const header = `"${data.name}" (${data.status})` +
+          `${data.event_date ? ` — ${data.event_date}` : ''}` +
+          `${data.location_text ? ` @ ${data.location_text}` : ''}`
+        const totalsLine =
+          `${data.totals.item_count} item(s), ${data.totals.sold_count} sold. ` +
+          `Asking total: ${formatCents(data.totals.total_asking_cents)}. ` +
+          `Sold total: ${formatCents(data.totals.total_sold_cents)}.`
+        const itemLines = data.items.map((item, i) => {
+          const price = item.asking_price_cents != null ? formatCents(item.asking_price_cents) : 'no price set'
+          const sold = item.sold
+            ? ` [SOLD${item.sold_price_cents != null ? ` ${formatCents(item.sold_price_cents)}` : ''}]`
+            : ''
+          const title = item.title ? ` "${item.title}"` : ''
+          return `${i + 1}. ${item.workshop_id}${title} — ${price}${sold}  (item_id: ${item.id})`
+        })
+        const body = itemLines.length ? itemLines.join('\n') : '(no items yet)'
+        return { content: [{ type: 'text' as const, text: `${header}\n${totalsLine}\n\n${body}` }] }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (msg.toLowerCase().includes('not found')) {
+          return { content: [{ type: 'text' as const, text: `No market event found: ${id}` }] }
+        }
+        throw err
+      }
+    }
+  )
+
+  // ── update_market_event ───────────────────────────────────────────────────
+
+  server.registerTool(
+    'update_market_event',
+    {
+      description:
+        'Update a market event\'s name, date, location, notes, or status. Only pass fields you want to change.',
+      annotations: { title: 'Update market event', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              id: z.string().describe('Market event UUID'),
+              name: z.string().optional(),
+              event_date: z.string().nullable().optional().describe('ISO date, or null to clear'),
+              location_text: z.string().nullable().optional(),
+              notes: z.string().nullable().optional(),
+              status: z.string().optional().describe('planning | active | completed | cancelled'),
+            }),
+    },
+    async ({ id, name, event_date, location_text, notes, status }) => {
+      const body: Record<string, unknown> = {}
+      if (name !== undefined) body.name = name
+      if (event_date !== undefined) body.event_date = event_date
+      if (location_text !== undefined) body.location_text = location_text
+      if (notes !== undefined) body.notes = notes
+      if (status !== undefined) body.status = status
+
+      const updated = await api('PATCH', `/market-events/${encodeURIComponent(id)}`, body) as {
+        id: string; name: string; status: string
+      }
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Updated market event: ${updated.name} (${updated.id}), status: ${updated.status}`,
+        }],
+      }
+    }
+  )
+
+  // ── delete_market_event ───────────────────────────────────────────────────
+
+  server.registerTool(
+    'delete_market_event',
+    {
+      description:
+        'Permanently delete a market event and every item on it. Cannot be undone. The ' +
+        'pieces themselves are untouched — only the record of them being taken to this ' +
+        'market is removed.',
+      annotations: { title: 'Delete market event', destructiveHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({ id: z.string().describe('Market event UUID') }),
+    },
+    async ({ id }) => {
+      await api('DELETE', `/market-events/${encodeURIComponent(id)}`)
+      return { content: [{ type: 'text' as const, text: `Deleted market event ${id} and its items.` }] }
+    }
+  )
+
+  // ── add_market_items ──────────────────────────────────────────────────────
+
+  server.registerTool(
+    'add_market_items',
+    {
+      description:
+        'Add several pieces to a market event in one call — the "go through and select ' +
+        'everything you\'re taking" step. Accepts up to 100 workshop IDs or UUIDs, any ' +
+        'status, published or not (a market piece does not need a public Ringmark page). ' +
+        'Pieces that don\'t belong to this account, or are already on this event, are ' +
+        'skipped rather than failing the whole batch — check the response for what was skipped and why.',
+      annotations: { title: 'Add pieces to a market event', ...CLOSED_WORLD },
+      inputSchema: z.object({
+              market_event_id: z.string().describe('Market event UUID'),
+              object_ids: z.array(z.string()).min(1).max(100).describe(
+                'Workshop IDs or UUIDs of the pieces to add'
+              ),
+            }),
+    },
+    async ({ market_event_id, object_ids }) => {
+      const result = await api(
+        'POST',
+        `/market-events/${encodeURIComponent(market_event_id)}/items/bulk`,
+        { object_ids }
+      ) as {
+        added: Array<{ id: string; workshop_id: string }>
+        skipped: Array<{ id: string; reason: string }>
+      }
+      const lines = [`Added ${result.added.length} of ${object_ids.length} to market event ${market_event_id}.`]
+      if (result.added.length) {
+        lines.push(...result.added.map(i => `  + ${i.workshop_id} (item_id: ${i.id})`))
+      }
+      if (result.skipped.length) {
+        lines.push(`Skipped ${result.skipped.length}:`)
+        lines.push(...result.skipped.map(s => `  - ${s.id}: ${s.reason}`))
+      }
+      return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    }
+  )
+
+  // ── remove_market_item ────────────────────────────────────────────────────
+
+  server.registerTool(
+    'remove_market_item',
+    {
+      description:
+        'Remove a piece from a market event. The piece itself is untouched — only its ' +
+        'appearance at this event is deleted. Use get_market_event first to find the item_id.',
+      annotations: { title: 'Remove item from market event', destructiveHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              market_event_id: z.string().describe('Market event UUID'),
+              item_id: z.string().describe('Market event item UUID (from get_market_event)'),
+            }),
+    },
+    async ({ market_event_id, item_id }) => {
+      await api(
+        'DELETE',
+        `/market-events/${encodeURIComponent(market_event_id)}/items/${encodeURIComponent(item_id)}`
+      )
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Removed item ${item_id} from market event ${market_event_id}.`,
+        }],
+      }
+    }
+  )
+
+  // ── update_market_item_price ──────────────────────────────────────────────
+
+  server.registerTool(
+    'update_market_item_price',
+    {
+      description:
+        'Set the asking price for a piece at this specific market event — independent of ' +
+        'the piece\'s own price_cents and independent of its price at any other event (the ' +
+        'same piece can go to more than one market at a different price). Use ' +
+        'get_market_event first to find the item_id.',
+      annotations: { title: 'Update market item price', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              market_event_id: z.string().describe('Market event UUID'),
+              item_id: z.string().describe('Market event item UUID (from get_market_event)'),
+              asking_price_cents: z.number().int().nonnegative().nullable().describe(
+                'New asking price in cents (e.g. 12000 for $120.00). Pass null to clear it.'
+              ),
+            }),
+    },
+    async ({ market_event_id, item_id, asking_price_cents }) => {
+      const updated = await api(
+        'PATCH',
+        `/market-events/${encodeURIComponent(market_event_id)}/items/${encodeURIComponent(item_id)}`,
+        { asking_price_cents }
+      ) as { id: string; workshop_id: string; asking_price_cents: number | null }
+      const price = updated.asking_price_cents != null ? formatCents(updated.asking_price_cents) : 'cleared'
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Price updated for ${updated.workshop_id} on market event ${market_event_id}: ${price}`,
+        }],
+      }
+    }
+  )
+
+  // ── mark_item_sold ────────────────────────────────────────────────────────
+  //
+  // Prep/debrief tool, not the live-sale tool — see the section note above.
+
+  server.registerTool(
+    'mark_item_sold',
+    {
+      description:
+        'Mark a piece sold at this market event. This is for prep/debrief use — recording a ' +
+        'sale after the fact (e.g. reviewing what sold once you\'re back from a market) — ' +
+        'NOT for the live sale itself. Standing at the table with a customer in front of you ' +
+        'is a one-tap-checkbox moment handled by the mobile admin UI (big tap target, no ' +
+        'confirmation dialog); use that in the moment and this tool afterward. Also sets the ' +
+        'underlying object\'s status to sold. Defaults sold_price_cents to the item\'s asking ' +
+        'price when omitted.',
+      annotations: { title: 'Mark item sold (prep/debrief)', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              market_event_id: z.string().describe('Market event UUID'),
+              item_id: z.string().describe('Market event item UUID (from get_market_event)'),
+              sold_price_cents: z.number().int().nonnegative().optional().describe(
+                'Price it actually sold for, in cents. Defaults to the item\'s asking price if omitted.'
+              ),
+            }),
+    },
+    async ({ market_event_id, item_id, sold_price_cents }) => {
+      const body: Record<string, unknown> = {}
+      if (sold_price_cents !== undefined) body.sold_price_cents = sold_price_cents
+
+      const updated = await api(
+        'POST',
+        `/market-events/${encodeURIComponent(market_event_id)}/items/${encodeURIComponent(item_id)}/mark-sold`,
+        body
+      ) as { id: string; workshop_id: string; sold_price_cents: number | null }
+      const price = updated.sold_price_cents != null ? formatCents(updated.sold_price_cents) : 'no price recorded'
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Marked ${updated.workshop_id} sold at ${price} on market event ${market_event_id}. Object status set to sold.`,
+        }],
+      }
+    }
+  )
+
+  // ── unmark_item_sold ──────────────────────────────────────────────────────
+
+  server.registerTool(
+    'unmark_item_sold',
+    {
+      description:
+        'Undo a sale on a market event item — clears its sold state. Reverts the underlying ' +
+        'object\'s status to for_sale unconditionally (not to whatever it was before).',
+      annotations: { title: 'Unmark item sold', idempotentHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+              market_event_id: z.string().describe('Market event UUID'),
+              item_id: z.string().describe('Market event item UUID (from get_market_event)'),
+            }),
+    },
+    async ({ market_event_id, item_id }) => {
+      const updated = await api(
+        'POST',
+        `/market-events/${encodeURIComponent(market_event_id)}/items/${encodeURIComponent(item_id)}/unmark-sold`
+      ) as { id: string; workshop_id: string }
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Unmarked ${updated.workshop_id} as sold on market event ${market_event_id}. Object status reverted to for_sale.`,
+        }],
+      }
+    }
+  )
+
   // ── upload_photo ──────────────────────────────────────────────────────────
 
   server.registerTool(
@@ -734,6 +1089,11 @@ export function createServer(
   const server = new McpServer(SERVER_INFO)
   registerTools(server, apiKey, apiBase, timeoutMs, options)
   return server
+}
+
+/** Formats integer cents as a dollar string, e.g. 12000 → "$120.00". */
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`
 }
 
 function extToMime(ext: string): string {
