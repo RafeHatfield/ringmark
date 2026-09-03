@@ -72,6 +72,9 @@ POST   /api/v1/objects/:id/children                 Add child with auto flat-num
 GET    /api/v1/objects/:id/lineage                  Root-first journey chain
 GET    /api/v1/objects/:id/photos                   List live photos; ?include_deleted=true to see soft-deleted
 POST   /api/v1/objects/:id/photos                   Upload (multipart)
+POST   /api/v1/objects/:id/photos/upload-url        Reserve a direct upload; returns a single-use token
+GET    /api/v1/photos/:photoId                      Single photo incl. pending upload state
+PUT    /api/upload                                  Redeem an upload token (token-auth, not under /v1)
 PATCH  /api/v1/objects/:id/photos/:photoId          Update caption
 DELETE /api/v1/objects/:id/photos/:photoId          SOFT delete — reversible, file retained
 POST   /api/v1/objects/:id/photos/:photoId/restore  Undo a soft delete
@@ -79,7 +82,16 @@ GET    /api/v1/openapi.json                         OpenAPI 3.1 spec (no auth)
 GET    /api/v1/docs                                 Swagger UI (no auth)
 ```
 
-**Photo deletes are soft.** `deleted_at` is set; the storage file stays so restore works. Every photo *read* path must filter `.is('deleted_at', null)` — the two that matter most are `app/p/[slug]/page.tsx` and `app/p/[slug]/opengraph-image.tsx`, because missing them leaves a "deleted" photo live on the public web. Two paths deliberately do **not** filter, both commented in place: object deletion sweeps storage for all photos, and `createPhotoRecord`'s max-`sort_order` lookup counts deleted rows so restore can't collide.
+**Photo deletes are soft.** `deleted_at` is set; the storage file stays so restore works. Every photo *read* path must filter `.is('deleted_at', null)` **and** `.eq('status', 'live')` — the two that matter most are `app/p/[slug]/page.tsx` and `app/p/[slug]/opengraph-image.tsx`, because missing them leaves a "deleted" photo live on the public web. Two paths deliberately do **not** filter, both commented in place: object deletion sweeps storage for all photos, and the max-`sort_order` lookup counts deleted and pending rows so a restore or a concurrent reservation can't collide.
+
+**Direct photo upload.** `status = 'pending'` is a reservation: a row with a server-derived `storage_path` and no bytes behind it, created by `POST /api/v1/objects/:id/photos/upload-url` and finalised by `PUT /api/upload`. It exists because the hosted MCP server can't read the caller's disk and base64 through a model's context tops out around 100 KB, which forced photos down to 1200px. The image now goes sandbox → ringmark.org directly, never through the model.
+
+- Authorization lives in `upload-url` (account credential + `resolveObject`). `/api/upload` has no account — it holds a SHA-256-hashed, single-use, 15-minute token bound to exactly one row, so there is nothing for a caller to redirect.
+- The token goes in `Authorization: Bearer`, never the path: Vercel request logs record full paths.
+- Format comes from magic bytes (`lib/photo-upload.ts`), never `Content-Type`. The caller's filename contributes only a whitelisted extension and never reaches the storage path.
+- The storage write happens **before** the row is marked consumed. A failed storage write leaves the token live so the caller can retry; a stored-but-unfinalised row is reported to Sentry and swept.
+- `app/api/cron/sweep-pending-uploads` runs hourly (`vercel.json`) and deletes pending rows an hour past expiry. Its `status = 'pending'` filter is load-bearing — a live photo must never be selected by that query.
+- `/api/upload` is excluded from the middleware matcher alongside `/api/mcp`: a Supabase session refresh on a multi-megabyte token-authenticated body is pure cost.
 
 **Self-documenting:** `lib/api-schemas.ts` is the single source of truth. Zod schemas annotated with `.openapi()` drive both request validation and the generated OpenAPI spec (`lib/api-spec.ts`). If you add an endpoint, add the route and register it in `api-spec.ts`.
 
@@ -93,7 +105,8 @@ GET    /api/v1/docs                                 Swagger UI (no auth)
 - **The remote server is built without `allowForceDelete`**, so `delete_object` has no `force` parameter there. With the API's existing guards, the only object the public endpoint can delete is an unpublished leaf. The local stdio server opts in.
 - Clients must send `Accept: application/json, text/event-stream` or get 406 — a Streamable HTTP spec requirement, not ours.
 - 401s carry an RFC 9728 `WWW-Authenticate` challenge (`lib/mcp-auth.ts`). Without `resource_metadata` in it, a client gets a 401 with nowhere to go and the OAuth flow can never start.
-- `__tests__/mcp/contract-drift.test.ts` asserts every endpoint the tools call still exists in the OpenAPI spec. If you change a route, that test tells you which tool broke.
+- `create_upload_url` + `confirm_upload` are the preferred photo path from claude.ai; `upload_photo`'s description steers callers to them. All three proxy the REST API like every other tool — the token minting happens server-side, not in the MCP layer.
+- `__tests__/mcp/contract-drift.test.ts` asserts every endpoint the tools call still exists in the OpenAPI spec. If you change a route, that test tells you which tool broke. `__tests__/mcp/server.test.ts` pins the tool inventory — adding a tool means updating `EXPECTED_TOOLS`.
 
 ### OAuth 2.1
 
@@ -123,6 +136,7 @@ lib/api-schemas.ts          Zod schemas — single source of truth for validatio
 lib/api-spec.ts             OpenAPI 3.1 spec generator (generateSpec())
 lib/api-auth.ts             authenticateApiRequest() — API key + OAuth JWT, both account-scoped
 lib/mcp-auth.ts             RFC 9728 discovery helpers + the 401 challenge
+lib/photo-upload.ts         Upload token minting/hashing + magic-byte sniffing (pure, unit-tested)
 lib/resolve-object.ts       resolveObject() — UUID or workshop ID lookup scoped to account
 lib/supabase/service.ts     createServiceClient() for API routes (no getAccount — see above)
 actions/                    Server actions (objects.ts, photos.ts, story.ts)

@@ -191,12 +191,16 @@ export async function movePhoto(
 
   if (!photo) return { error: 'Photo not found.' }
 
+  // Must match what the admin UI actually renders. A pending upload reservation
+  // in this set would make a move swap against a row the user can't see, which
+  // reads as the button doing nothing.
   const { data: all } = await supabase
     .from('object_photos')
     .select('id, sort_order')
     .eq('object_id', photo.object_id)
     .eq('account_id', account.id)
     .is('deleted_at', null)
+    .eq('status', 'live')
 
   if (!all) return {}
 

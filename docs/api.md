@@ -253,6 +253,89 @@ Upload a photo via `multipart/form-data` (JPEG, PNG, WebP, or HEIC). Fields:
 
 **Response (201):** Photo record with a one-hour signed URL.
 
+Prefer the two-step direct upload below when the image is large or the client
+cannot easily send multipart — most importantly from the hosted MCP server,
+where multipart means routing the bytes through the calling model's context.
+
+---
+
+### POST /api/v1/objects/:id/photos/upload-url
+
+Reserve a photo record and mint a single-use token for uploading the image bytes
+straight to `PUT /api/upload`. This is where authorization happens: the
+redemption route has no account of its own, only a token bound to one row.
+
+**Body:** `filename` (required), `caption` (optional).
+
+The filename is used only to pick a whitelisted storage extension. It never
+becomes part of the storage path, and the extension is corrected if the uploaded
+bytes turn out to be a different format.
+
+**Response (201):**
+
+```json
+{
+  "photo_id": "…",
+  "upload_url": "https://ringmark.org/api/upload",
+  "upload_token": "…",
+  "expires_at": "2026-09-02T12:15:00.000Z",
+  "max_bytes": 4000000,
+  "accepted_types": ["image/jpeg", "image/png", "image/webp", "image/heic"],
+  "instructions": "curl -sS -X PUT --data-binary @<file> …"
+}
+```
+
+The reserved record has `status: "pending"` and is excluded from every read path
+until the bytes arrive — it has a `storage_path` but nothing behind it. A
+reservation that is never redeemed is swept an hour after it expires.
+
+---
+
+### PUT /api/upload
+
+Redeem an upload token and store the request body as that photo's image.
+
+**Auth:** `Authorization: Bearer <upload_token>` — the token from
+`upload-url`, not an API key. It travels in the header rather than the path
+because Vercel's request logs record full paths.
+
+```bash
+curl -sS -X PUT --data-binary @photo.jpg \
+  -H 'Content-Type: image/jpeg' \
+  -H "Authorization: Bearer $UPLOAD_TOKEN" \
+  https://ringmark.org/api/upload
+```
+
+**Response (200):** The finalised photo record with a signed URL — there is
+nothing else to call in the happy path.
+
+| Status | Meaning |
+|---|---|
+| `400` | Empty body |
+| `401` | Missing token |
+| `404` | Unknown or already-consumed token |
+| `410` | Token expired or already used |
+| `413` | Body over 4 MB |
+| `415` | Body is not a supported image |
+
+A `413` or `415` leaves the reservation pending, so the same token can be
+retried with corrected bytes until it expires. Format is determined by magic
+bytes; the `Content-Type` header is not trusted.
+
+---
+
+### GET /api/v1/photos/:photoId
+
+Read a single photo by id, account-scoped. Unlike the per-object photo list this
+also returns `pending` reservations, so it can answer whether a direct upload
+landed. Only needed when the `PUT` response was lost — read-only, and it never
+consumes or extends a reservation.
+
+**Response (200):** Photo record plus `status`, `upload_state`
+(`usable` | `consumed` | `expired`, null unless pending), `upload_expires_at`,
+and a `message` describing the next step. `signed_url` is null unless the photo
+is live.
+
 ---
 
 ### PATCH /api/v1/objects/:id/photos/:photoId

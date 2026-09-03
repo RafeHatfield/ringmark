@@ -598,12 +598,16 @@ export function registerTools(
     {
       description:
         'Upload a photo to a workshop object. The photo appears on the public story page.\n\n' +
+        'If you have a LOCAL FILE, prefer create_upload_url — it sends the bytes directly to ' +
+        'Ringmark instead of through this conversation, so there is no practical size limit and ' +
+        'no need to degrade the image. Use this tool when a public URL already exists.\n\n' +
         'Three modes — use whichever applies:\n' +
         '• image_url: a publicly accessible URL (iCloud share link, Google Photos link, Dropbox, CDN, etc.).\n' +
         '  The MCP server fetches the image server-side. This is the best option when Claude has a URL.\n' +
         '• file_path: an absolute path on the machine running the MCP server (the user\'s own disk,\n' +
         '  e.g. ~/Downloads/IMG_1719.jpeg). Best when the file is already local.\n' +
-        '• image_data + filename: base64 bytes (last resort — impractical for real photos).',
+        '• image_data + filename: base64 bytes (last resort — impractical for real photos,\n' +
+        '  which is exactly what create_upload_url exists to solve).',
       // openWorldHint stays true here: image_url fetches an arbitrary URL.
       annotations: { title: 'Upload photo', openWorldHint: true },
       inputSchema: z.object({
@@ -714,6 +718,104 @@ export function registerTools(
         `Sort order: ${result.sort_order}`,
       ]
       if (result.signed_url) lines.push(`View: ${result.signed_url}`)
+
+      return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    }
+  )
+
+  // ── create_upload_url ─────────────────────────────────────────────────────
+  //
+  // The preferred path for a local file. Every mode of upload_photo forces the
+  // image bytes through the calling model's context — base64 tops out around
+  // 100 KB in practice, which means visibly degraded photos. This reserves a
+  // slot and hands back a URL the caller can curl the file straight to, so
+  // full-resolution images cost nothing in context.
+
+  server.registerTool(
+    'create_upload_url',
+    {
+      description:
+        'Reserve a photo upload slot and get a one-time URL to send the image bytes to. ' +
+        'PREFERRED over upload_photo whenever you have a local file — the image goes straight ' +
+        'to Ringmark instead of through this conversation, so there is no size ceiling and no ' +
+        'quality loss.\n\n' +
+        'Two steps:\n' +
+        '1. Call this with the object ID and filename. You get back upload_url and upload_token.\n' +
+        '2. Run the curl command from the returned `instructions` field to send the bytes.\n\n' +
+        'The curl response is the finished photo record — nothing else to call. Resize to a ' +
+        '2000px long edge first; the cap is 4 MB. The token is single-use and expires in ' +
+        '15 minutes. If the upload never happens, the reservation is cleaned up automatically.',
+      annotations: { title: 'Create photo upload URL', ...CLOSED_WORLD },
+      inputSchema: z.object({
+        object_id: z.string().describe('Workshop ID (e.g. RH10-2) or UUID of the object to attach the photo to'),
+        filename: z.string().describe('Original filename with extension, e.g. IMG_1719.jpeg'),
+        caption: z.string().optional().describe('Optional caption for the photo'),
+      }),
+    },
+    async ({ object_id, filename, caption }) => {
+      const result = await api(
+        'POST',
+        `/objects/${encodeURIComponent(object_id)}/photos/upload-url`,
+        { filename, ...(caption ? { caption } : {}) },
+      ) as {
+        photo_id: string
+        upload_url: string
+        upload_token: string
+        expires_at: string
+        max_bytes: number
+        instructions: string
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: [
+            `Upload slot reserved for ${object_id}`,
+            `Photo ID: ${result.photo_id}`,
+            `Expires: ${result.expires_at}`,
+            `Max size: ${result.max_bytes} bytes`,
+            '',
+            result.instructions,
+          ].join('\n'),
+        }],
+      }
+    }
+  )
+
+  // ── confirm_upload ────────────────────────────────────────────────────────
+
+  server.registerTool(
+    'confirm_upload',
+    {
+      description:
+        'Check whether a reserved photo upload actually landed. Only needed if the curl from ' +
+        'create_upload_url failed or its response was lost — a successful upload already returns ' +
+        'the finished record. Reports the photo as live, still pending, or expired.',
+      annotations: { title: 'Confirm photo upload', readOnlyHint: true, ...CLOSED_WORLD },
+      inputSchema: z.object({
+        photo_id: z.string().describe('Photo UUID returned by create_upload_url'),
+      }),
+    },
+    async ({ photo_id }) => {
+      const photo = await api('GET', `/photos/${encodeURIComponent(photo_id)}`) as {
+        id: string
+        object_id: string
+        status: string
+        bytes: number | null
+        sort_order: number
+        signed_url: string | null
+        message: string | null
+      }
+
+      const lines = [
+        `Photo ${photo.id} on object ${photo.object_id}`,
+        `Status: ${photo.status}`,
+      ]
+      if (photo.status === 'live') {
+        lines.push(`Size: ${photo.bytes ?? 'unknown'} bytes`, `Sort order: ${photo.sort_order}`)
+        if (photo.signed_url) lines.push(`View: ${photo.signed_url}`)
+      }
+      if (photo.message) lines.push(photo.message)
 
       return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
     }
