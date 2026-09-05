@@ -90,7 +90,7 @@ GET    /api/v1/docs                                 Swagger UI (no auth)
 - The token goes in `Authorization: Bearer`, never the path: Vercel request logs record full paths.
 - Format comes from magic bytes (`lib/photo-upload.ts`), never `Content-Type`. The caller's filename contributes only a whitelisted extension and never reaches the storage path.
 - The storage write happens **before** the row is marked consumed. A failed storage write leaves the token live so the caller can retry; a stored-but-unfinalised row is reported to Sentry and swept.
-- `app/api/cron/sweep-pending-uploads` runs hourly (`vercel.json`) and deletes pending rows an hour past expiry. Its `status = 'pending'` filter is load-bearing — a live photo must never be selected by that query.
+- `app/api/cron/sweep-pending-uploads` runs daily (`vercel.json` — Hobby allows once-daily crons only) and deletes pending rows an hour or more past expiry. Its `status = 'pending'` filter is load-bearing — a live photo must never be selected by that query. It fails closed on Vercel: no `CRON_SECRET`, no sweep (503).
 - `/api/upload` is excluded from the middleware matcher alongside `/api/mcp`: a Supabase session refresh on a multi-megabyte token-authenticated body is pure cost.
 
 **Self-documenting:** `lib/api-schemas.ts` is the single source of truth. Zod schemas annotated with `.openapi()` drive both request validation and the generated OpenAPI spec (`lib/api-spec.ts`). If you add an endpoint, add the route and register it in `api-spec.ts`.

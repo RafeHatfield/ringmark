@@ -10,8 +10,16 @@
  * One hour of grace past expiry, so a reservation is never swept out from under
  * an upload that is mid-flight against a token that just lapsed.
  *
- * Scheduled hourly via vercel.json. Vercel signs cron invocations with
- * CRON_SECRET; the guard is fail-closed when that is configured.
+ * Scheduled daily via vercel.json — Vercel's Hobby plan allows once-daily crons
+ * only. A reservation therefore lingers up to a day past its grace period, which
+ * costs nothing: pending rows are invisible in every read path, so a stale one is
+ * a dead database row and nothing more.
+ *
+ * Vercel signs cron invocations with CRON_SECRET. The guard fails closed once
+ * deployed: an unset secret there is a misconfiguration, and the safe response to
+ * a misconfigured delete endpoint is to stop sweeping rather than to run
+ * unauthenticated. Local dev, which has neither variable, stays open so the e2e
+ * suite can drive it.
  */
 
 import { createServiceClient } from '@/lib/supabase/service'
@@ -24,11 +32,15 @@ const GRACE_MS = 60 * 60 * 1000
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET
-  if (secret) {
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${secret}`) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+
+  // Deployed without a secret: refuse to run at all. This turns "forgot to set
+  // the env var" into a visibly broken cron rather than a public delete
+  // endpoint, which is the direction that mistake should fail in.
+  if (!secret && process.env.VERCEL) {
+    return Response.json({ error: 'CRON_SECRET is not configured' }, { status: 503 })
+  }
+  if (secret && request.headers.get('authorization') !== `Bearer ${secret}`) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const db = createServiceClient()

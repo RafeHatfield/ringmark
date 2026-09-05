@@ -287,7 +287,8 @@ bytes turn out to be a different format.
 
 The reserved record has `status: "pending"` and is excluded from every read path
 until the bytes arrive — it has a `storage_path` but nothing behind it. A
-reservation that is never redeemed is swept an hour after it expires.
+reservation that is never redeemed is swept by a daily cron, an hour or more
+past expiry.
 
 ---
 

@@ -154,7 +154,7 @@ export async function PUT(request: Request) {
     .single()
 
   if (updateError || !updated) {
-    // Bytes are in Storage but the row never went live. The hourly sweep will
+    // Bytes are in Storage but the row never went live. The daily sweep will
     // remove both, but this is the one ordering hazard in the flow, so it is
     // reported rather than left to a log nobody reads.
     Sentry.captureException(
