@@ -23,6 +23,7 @@ import {
   UPLOAD_MAX_BYTES,
   extensionForMime,
   hashUploadToken,
+  readImageDimensions,
   reservationState,
   sniffImageMime,
 } from '@/lib/photo-upload'
@@ -128,6 +129,10 @@ export async function PUT(request: Request) {
   const expectedExt = extensionForMime(mime)
   const storagePath = photo.storage_path.replace(/\.[^./]+$/, `.${expectedExt}`)
 
+  // Null for HEIC and for anything whose header won't parse. Not an error —
+  // the columns are nullable and nothing renders differently without them.
+  const dimensions = readImageDimensions(body)
+
   const { error: storageError } = await db.storage
     .from(BUCKET)
     .upload(storagePath, body, { contentType: mime, upsert: true })
@@ -144,13 +149,15 @@ export async function PUT(request: Request) {
       status: 'live',
       storage_path: storagePath,
       bytes: body.length,
+      width: dimensions?.width ?? null,
+      height: dimensions?.height ?? null,
       upload_consumed_at: new Date().toISOString(),
       upload_token_hash: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', photo.id)
     .eq('status', 'pending')
-    .select('id, object_id, storage_path, caption, is_public, sort_order, status, bytes, created_at')
+    .select('id, object_id, storage_path, caption, is_public, sort_order, status, bytes, width, height, created_at')
     .single()
 
   if (updateError || !updated) {

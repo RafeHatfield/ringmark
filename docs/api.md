@@ -251,7 +251,8 @@ actually live on the object.
 Upload a photo via `multipart/form-data` (JPEG, PNG, WebP, or HEIC). Fields:
 `file` (required) and `caption` (optional).
 
-**Response (201):** Photo record with a one-hour signed URL.
+**Response (201):** Photo record with a one-hour signed URL. Records `bytes`,
+`width` and `height` on the same terms as the direct-upload route.
 
 Prefer the two-step direct upload below when the image is large or the client
 cannot easily send multipart — most importantly from the hosted MCP server,
@@ -308,7 +309,9 @@ curl -sS -X PUT --data-binary @photo.jpg \
 ```
 
 **Response (200):** The finalised photo record with a signed URL — there is
-nothing else to call in the happy path.
+nothing else to call in the happy path. `bytes`, `width` and `height` are
+recorded from the uploaded data; `width`/`height` are null for HEIC and for
+anything whose header will not parse.
 
 | Status | Meaning |
 |---|---|

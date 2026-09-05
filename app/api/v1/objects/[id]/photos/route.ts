@@ -1,6 +1,7 @@
 import { authenticateApiRequest } from '@/lib/api-auth'
 import { createServiceClient } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
+import { readImageDimensions } from '@/lib/photo-upload'
 
 const BUCKET = 'object-photos'
 const SIGNED_URL_EXPIRY_SECONDS = 3600
@@ -106,6 +107,10 @@ export async function POST(
   const ext = extFromFilename(file.name) || extFromMime(file.type) || 'jpg'
   const storagePath = `${account.id}/${object.id}/${crypto.randomUUID()}.${ext}`
 
+  // Same header parse the direct-upload route does, so both paths record
+  // dimensions identically. Null for HEIC and anything unparseable.
+  const dimensions = readImageDimensions(new Uint8Array(await file.arrayBuffer()))
+
   const { error: storageError } = await db.storage
     .from(BUCKET)
     .upload(storagePath, file, { upsert: false })
@@ -131,8 +136,11 @@ export async function POST(
       caption: captionStr,
       is_public: true,
       sort_order: (lastPhoto?.sort_order ?? -1) + 1,
+      bytes: file.size,
+      width: dimensions?.width ?? null,
+      height: dimensions?.height ?? null,
     })
-    .select('id, object_id, storage_path, caption, is_public, sort_order, created_at')
+    .select('id, object_id, storage_path, caption, is_public, sort_order, bytes, width, height, created_at')
     .single()
 
   if (insertError || !photo) {
