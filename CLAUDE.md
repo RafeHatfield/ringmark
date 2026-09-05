@@ -47,6 +47,12 @@ See `ringmark-project-spec.md` for full product specification. The spec is the s
 /objects/[id]/child/new     Add child object
 /objects/[id]/story         Edit public story + publish
 /objects/[id]/qr            QR card + download
+/markets                    List market events, filterable by status, newest first
+/markets/new                Create a market event
+/markets/[id]               Market day builder — add pieces, price, mark sold
+/markets/[id]/pack          Print: packing checklist (no prices)
+/markets/[id]/price-sheet   Print: workshop ID + title + asking price, plus total
+/markets/[id]/labels        Print: one QrCard per item, label-sheet grid
 /p/[slug]                   Public story page (no auth required — server-side auth decision)
 ```
 
@@ -78,6 +84,17 @@ PUT    /api/upload                                  Redeem an upload token (toke
 PATCH  /api/v1/objects/:id/photos/:photoId          Update caption
 DELETE /api/v1/objects/:id/photos/:photoId          SOFT delete — reversible, file retained
 POST   /api/v1/objects/:id/photos/:photoId/restore  Undo a soft delete
+GET    /api/v1/market-events                                 List events; filter by ?status
+POST   /api/v1/market-events                                 Create event (starts in 'planning')
+GET    /api/v1/market-events/:id                             Get one; includes items + computed totals
+PATCH  /api/v1/market-events/:id                             Partial update; also transitions status
+DELETE /api/v1/market-events/:id                             Delete; items cascade at the DB level
+POST   /api/v1/market-events/:id/items                       Add one object; 409 if already on this event
+POST   /api/v1/market-events/:id/items/bulk                  Add many; skips duplicates/cross-account, never fails the batch
+PATCH  /api/v1/market-events/:id/items/:itemId               Update asking price / sort order
+DELETE /api/v1/market-events/:id/items/:itemId               Remove from event; the object itself is untouched
+POST   /api/v1/market-events/:id/items/:itemId/mark-sold     Mark sold; cascades wood_objects.status to 'sold'
+POST   /api/v1/market-events/:id/items/:itemId/unmark-sold   Revert to unsold; status reverts to 'for_sale' unconditionally
 GET    /api/v1/openapi.json                         OpenAPI 3.1 spec (no auth)
 GET    /api/v1/docs                                 Swagger UI (no auth)
 ```
@@ -92,6 +109,8 @@ GET    /api/v1/docs                                 Swagger UI (no auth)
 - The storage write happens **before** the row is marked consumed. A failed storage write leaves the token live so the caller can retry; a stored-but-unfinalised row is reported to Sentry and swept.
 - `app/api/cron/sweep-pending-uploads` runs daily (`vercel.json` — Hobby allows once-daily crons only) and deletes pending rows an hour or more past expiry. Its `status = 'pending'` filter is load-bearing — a live photo must never be selected by that query. It fails closed on Vercel: no `CRON_SECRET`, no sweep (503).
 - `/api/upload` is excluded from the middleware matcher alongside `/api/mcp`: a Supabase session refresh on a multi-megabyte token-authenticated body is pure cost.
+
+**Market Mode is fully private.** No `/p/[slug]` exposure, no OG card, no anon RLS policy on `market_events` or `market_event_items` — both tables carry only the members-scoped policy, nothing else. `price_cents` (on `wood_objects`) and `asking_price_cents`/`sold_price_cents` (on `market_event_items`) are integer cents, single implicit currency, informational only — Ringmark has no checkout — and are never selected in any public/anon query. `market_event_items` is many-to-many on purpose: a piece can go to several markets before it sells, each with its own asking price and sold state — don't collapse it to a boolean on `wood_objects`. Marking an item sold cascades `wood_objects.status` to `'sold'`; unmarking reverts it to `'for_sale'` unconditionally, not whatever it was before — deliberate, avoids a "previous status" column. The admin UI calls `actions/market-events.ts`; `app/api/v1/market-events/*` is Bearer-only, for MCP and external clients — the browser never holds an API key. Same split as `actions/photos.ts` vs. `app/api/v1/objects/[id]/photos/*`.
 
 **Self-documenting:** `lib/api-schemas.ts` is the single source of truth. Zod schemas annotated with `.openapi()` drive both request validation and the generated OpenAPI spec (`lib/api-spec.ts`). If you add an endpoint, add the route and register it in `api-spec.ts`.
 
@@ -138,6 +157,7 @@ lib/api-auth.ts             authenticateApiRequest() — API key + OAuth JWT, bo
 lib/mcp-auth.ts             RFC 9728 discovery helpers + the 401 challenge
 lib/photo-upload.ts         Upload token minting/hashing + magic-byte sniffing (pure, unit-tested)
 lib/resolve-object.ts       resolveObject() — UUID or workshop ID lookup scoped to account
+lib/money.ts                Integer-cents boundary — formatPrice/parseDollarsToCents; dollars only here
 lib/supabase/service.ts     createServiceClient() for API routes (no getAccount — see above)
 actions/                    Server actions (objects.ts, photos.ts, story.ts)
 supabase/migrations/        SQL migrations (run via Supabase CLI)
