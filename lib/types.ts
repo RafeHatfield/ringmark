@@ -121,6 +121,13 @@ export type ObjectPhoto = {
   /** Set when the photo is soft-deleted. Null means live. */
   deleted_at: string | null
   deleted_by: string | null
+  /** 'pending' means an upload was reserved but no bytes have arrived yet. */
+  status: 'pending' | 'live'
+  /** SHA-256 of the single-use upload token. Nulled once redeemed. */
+  upload_token_hash: string | null
+  upload_expires_at: string | null
+  upload_consumed_at: string | null
+  bytes: number | null
 }
 
 export type ObjectPhotoInsert = {
@@ -136,6 +143,11 @@ export type ObjectPhotoInsert = {
   updated_at?: string
   deleted_at?: string | null
   deleted_by?: string | null
+  status?: 'pending' | 'live'
+  upload_token_hash?: string | null
+  upload_expires_at?: string | null
+  upload_consumed_at?: string | null
+  bytes?: number | null
 }
 
 export type ObjectPhotoUpdate = Partial<ObjectPhotoInsert>

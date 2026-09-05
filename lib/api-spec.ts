@@ -19,6 +19,9 @@ import {
   LineageStepSchema,
   LineageResponseSchema,
   PhotoSchema,
+  PhotoStateSchema,
+  CreateUploadUrlSchema,
+  UploadUrlSchema,
   ErrorSchema,
   objectTypeEnum,
   objectStatusEnum,
@@ -49,6 +52,9 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register('LineageStep', LineageStepSchema)
   registry.register('LineageResponse', LineageResponseSchema)
   registry.register('Photo', PhotoSchema)
+  registry.register('PhotoState', PhotoStateSchema)
+  registry.register('CreateUploadUrl', CreateUploadUrlSchema)
+  registry.register('UploadUrl', UploadUrlSchema)
   registry.register('Error', ErrorSchema)
   registry.register('MarketEvent', MarketEventSchema)
   registry.register('MarketEventDetail', MarketEventDetailSchema)
@@ -656,6 +662,67 @@ function buildRegistry(): OpenAPIRegistry {
       200: {
         description: 'Updated market event item',
         content: { 'application/json': { schema: MarketEventItemSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  // ── POST /api/v1/objects/:id/photos/upload-url ─────────────────────────────
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/objects/{id}/photos/upload-url',
+    tags: ['Photos'],
+    summary: 'Reserve a direct photo upload',
+    description:
+      'Reserves a photo record and returns a single-use token for uploading the image bytes ' +
+      'straight to PUT /api/upload. Use this instead of the multipart endpoint when the image ' +
+      'is large or the client cannot send multipart — the bytes never pass through the caller, ' +
+      'only the token does.\n\n' +
+      'The reserved record has status `pending` and is excluded from every read path until the ' +
+      'bytes arrive. The token is single-use and expires in 15 minutes; an unredeemed ' +
+      'reservation is swept automatically.',
+    security,
+    request: {
+      params: z.object({ id: idParam.schema }),
+      body: {
+        required: true,
+        content: { 'application/json': { schema: CreateUploadUrlSchema } },
+      },
+    },
+    responses: {
+      201: {
+        description: 'Reservation created — upload the bytes to upload_url within the expiry window',
+        content: { 'application/json': { schema: UploadUrlSchema } },
+      },
+      400: {
+        description: 'Missing filename or invalid body',
+        content: { 'application/json': { schema: ErrorSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  // ── GET /api/v1/photos/:photoId ────────────────────────────────────────────
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/photos/{photoId}',
+    tags: ['Photos'],
+    summary: 'Get a single photo, including upload state',
+    description:
+      'Returns a photo by id, scoped to the caller\'s account. Unlike the per-object photo list ' +
+      'this also returns `pending` reservations, so it can answer whether a direct upload landed. ' +
+      'A successful PUT /api/upload already returns the finished record, so this is only needed ' +
+      'when that response was lost. Read-only — it never consumes or extends a reservation.',
+    security,
+    request: {
+      params: z.object({
+        photoId: z.string().uuid().openapi({ description: 'Photo UUID' }),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Photo record. signed_url is null unless the photo is live.',
+        content: { 'application/json': { schema: PhotoStateSchema } },
       },
       ...errorResponses,
     },

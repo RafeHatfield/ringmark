@@ -31,6 +31,9 @@ export async function GET(
     .select('id, caption, is_public, sort_order, storage_path, created_at, deleted_at')
     .eq('object_id', object.id)
     .eq('account_id', account.id)
+    // Pending rows are upload reservations, not photos — they have no bytes
+    // behind their storage_path. Check one with GET /api/v1/photos/:photoId.
+    .eq('status', 'live')
 
   if (!includeDeleted) query = query.is('deleted_at', null)
 

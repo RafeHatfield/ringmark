@@ -37,6 +37,7 @@ export default async function OgImage({ params }: { params: Promise<{ slug: stri
       .eq('object_id', object.id)
       .eq('is_public', true)
       .is('deleted_at', null)
+      .eq('status', 'live')
       .order('sort_order', { ascending: true })
       .limit(1)
 

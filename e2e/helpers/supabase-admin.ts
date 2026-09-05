@@ -123,6 +123,21 @@ export async function updateObjectAdmin(objectId: string, data: Record<string, u
   await client.from('wood_objects').update(data).eq('id', objectId)
 }
 
+export async function updatePhotoAdmin(photoId: string, data: Record<string, unknown>): Promise<void> {
+  const client = adminClient()
+  await client.from('object_photos').update(data).eq('id', photoId)
+}
+
+/**
+ * Reads a photo row directly, including the upload columns the API never
+ * exposes. Used to assert that the plaintext upload token is not persisted.
+ */
+export async function getPhotoRowAdmin(photoId: string): Promise<Record<string, unknown> | null> {
+  const client = adminClient()
+  const { data } = await client.from('object_photos').select('*').eq('id', photoId).maybeSingle()
+  return data ?? null
+}
+
 export async function getAccountIdForUser(userId: string): Promise<string> {
   const client = adminClient()
   const { data } = await client

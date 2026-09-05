@@ -6,5 +6,11 @@
       "destination": "https://ringmark.org/:path*",
       "permanent": true
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/sweep-pending-uploads",
+      "schedule": "17 4 * * *"
+    }
   ]
 }
