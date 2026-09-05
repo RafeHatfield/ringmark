@@ -32,6 +32,12 @@ export const objectStatusEnum = z
 export const speciesConfidenceEnum = z.enum(['confirmed', 'likely', 'guessed', 'unknown'])
 export const lineageConfidenceEnum = z.enum(['exact', 'probable', 'batch_level', 'unknown'])
 
+export const photoStatusEnum = z.enum(['pending', 'live']).openapi({
+  description:
+    "'live' is a real photo. 'pending' is an upload reservation with no image behind it yet — " +
+    'it is excluded from every read path, including the public story page.',
+})
+
 // ── Full object response ──────────────────────────────────────────────────────
 
 export const WoodObjectSchema = z
@@ -199,8 +205,53 @@ export const PhotoSchema = z
         'Set when the photo has been soft-deleted. Null on live photos. Only ever non-null ' +
         'in list responses requested with ?include_deleted=true.',
     }),
+    status: photoStatusEnum.optional(),
+    bytes: z.number().int().nullable().optional().openapi({
+      description: 'Size of the stored image in bytes. Null for photos uploaded before this was recorded.',
+    }),
   })
   .openapi('Photo')
+
+// ── Direct upload ─────────────────────────────────────────────────────────────
+
+export const CreateUploadUrlSchema = z
+  .object({
+    filename: z.string().min(1).openapi({
+      example: 'IMG_1719.jpeg',
+      description:
+        'Original filename. Used only to pick a whitelisted storage extension — it never ' +
+        'becomes part of the storage path, and the extension is corrected if the uploaded ' +
+        'bytes turn out to be a different format.',
+    }),
+    caption: z.string().optional().openapi({ description: 'Optional caption, set at reservation time' }),
+  })
+  .openapi('CreateUploadUrl')
+
+export const UploadUrlSchema = z
+  .object({
+    photo_id: z.string().uuid().openapi({ description: 'The reserved photo record' }),
+    upload_url: z.string().openapi({ example: 'https://ringmark.org/api/upload' }),
+    upload_token: z.string().openapi({
+      description:
+        'Single-use bearer token for the upload. Send as Authorization: Bearer. Returned once ' +
+        'and never stored in plaintext.',
+    }),
+    expires_at: z.string().datetime(),
+    max_bytes: z.number().int().openapi({ example: 4000000 }),
+    accepted_types: z.array(z.string()).openapi({ example: ['image/jpeg', 'image/png', 'image/webp', 'image/heic'] }),
+    instructions: z.string().openapi({ description: 'Ready-to-run curl command for the calling client' }),
+  })
+  .openapi('UploadUrl')
+
+export const PhotoStateSchema = PhotoSchema.extend({
+  upload_expires_at: z.string().datetime().nullable().openapi({
+    description: 'When the reservation lapses. Null unless status is pending.',
+  }),
+  upload_state: z.enum(['usable', 'consumed', 'expired']).nullable().openapi({
+    description: 'Redemption state of the reservation. Null unless status is pending.',
+  }),
+  message: z.string().nullable().openapi({ description: 'Human-readable next step for a pending photo' }),
+}).openapi('PhotoState')
 
 // ── Error response ────────────────────────────────────────────────────────────
 

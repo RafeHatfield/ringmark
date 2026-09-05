@@ -60,10 +60,11 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // api/mcp and .well-known are excluded on purpose: both are token-authenticated
-    // or fully public, they must answer identically to anonymous clients, and
-    // running the Supabase session refresh on them only adds latency and cookie
-    // churn to requests that will never carry a browser session.
-    '/((?!_next/static|_next/image|favicon.ico|api/mcp|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    // api/mcp, api/upload and .well-known are excluded on purpose: all are
+    // token-authenticated or fully public, they must answer identically to
+    // anonymous clients, and running the Supabase session refresh on them only
+    // adds latency and cookie churn to requests that will never carry a browser
+    // session. For api/upload that cost lands on a multi-megabyte request body.
+    '/((?!_next/static|_next/image|favicon.ico|api/mcp|api/upload|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

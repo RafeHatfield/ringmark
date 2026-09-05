@@ -52,6 +52,7 @@ export async function GET(
     .in('object_id', chain.map(s => s.id))
     .eq('is_public', true)
     .is('deleted_at', null)
+    .eq('status', 'live')
     .order('sort_order', { ascending: true })
 
   // Group: first photo path + count per object

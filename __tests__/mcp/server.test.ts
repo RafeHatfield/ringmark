@@ -23,7 +23,9 @@ const TEST_BASE = 'http://test.local/api/v1'
 
 const EXPECTED_TOOLS = [
   'add_child',
+  'confirm_upload',
   'create_object',
+  'create_upload_url',
   'delete_object',
   'delete_photo',
   'get_lineage',
@@ -72,7 +74,7 @@ function textOf(result: Awaited<ReturnType<Client['callTool']>>): string {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('ringmark MCP server — manifest', () => {
-  it('tools/list returns all 15 expected tools', async () => {
+  it('tools/list returns all 17 expected tools', async () => {
     const { client, cleanup } = await connectPair()
     try {
       const { tools } = await client.listTools()
@@ -373,6 +375,150 @@ describe('ringmark MCP server — get_object behaviour', () => {
       assert.equal(capturedAuth, `Bearer ${TEST_KEY}`)
     } finally {
       global.fetch = original
+      await cleanup()
+    }
+  })
+})
+
+describe('ringmark MCP server — create_upload_url + confirm_upload', () => {
+  const RESERVATION = {
+    photo_id: 'photo-ccc',
+    upload_url: 'https://ringmark.org/api/upload',
+    upload_token: 'tok_abc123',
+    expires_at: '2026-09-02T12:15:00.000Z',
+    max_bytes: 4_000_000,
+    accepted_types: ['image/jpeg', 'image/png', 'image/webp', 'image/heic'],
+    instructions:
+      "curl -sS -X PUT --data-binary @<file> -H 'Content-Type: image/jpeg' " +
+      "-H 'Authorization: Bearer tok_abc123' 'https://ringmark.org/api/upload'",
+  }
+
+  it('create_upload_url posts to the object\'s upload-url endpoint', async () => {
+    let capturedUrl = ''
+    let capturedBody = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(url)
+      capturedBody = String(init?.body ?? '')
+      return Response.json(RESERVATION, { status: 201 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'create_upload_url',
+        arguments: { object_id: 'RH10-2', filename: 'IMG_1719.jpeg', caption: 'Second angle' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(
+        capturedUrl.endsWith('/objects/RH10-2/photos/upload-url'),
+        `unexpected URL: ${capturedUrl}`,
+      )
+      assert.equal(JSON.parse(capturedBody).filename, 'IMG_1719.jpeg')
+      assert.equal(JSON.parse(capturedBody).caption, 'Second angle')
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('create_upload_url surfaces the curl command the caller has to run', async () => {
+    // The whole flow depends on the model actually running the upload step, so
+    // the ready-made command must survive into the tool output verbatim.
+    const restore = mockFetch(Response.json(RESERVATION, { status: 201 }))
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'create_upload_url',
+        arguments: { object_id: 'RH10-2', filename: 'IMG_1719.jpeg' },
+      })
+      const text = textOf(result)
+      assert.ok(text.includes(RESERVATION.instructions), `instructions missing from: ${text}`)
+      assert.ok(text.includes('photo-ccc'), `photo id missing from: ${text}`)
+      assert.ok(text.includes('4000000'), `max_bytes missing from: ${text}`)
+    } finally {
+      restore()
+      await cleanup()
+    }
+  })
+
+  it('create_upload_url omits caption when none is given', async () => {
+    let capturedBody = ''
+    const original = global.fetch
+    global.fetch = async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = String(init?.body ?? '')
+      return Response.json(RESERVATION, { status: 201 })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      await client.callTool({
+        name: 'create_upload_url',
+        arguments: { object_id: 'RH10-2', filename: 'a.jpg' },
+      })
+      assert.equal('caption' in JSON.parse(capturedBody), false, capturedBody)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('confirm_upload reports a live photo with its size and URL', async () => {
+    let capturedUrl = ''
+    const original = global.fetch
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = String(url)
+      return Response.json({
+        id: 'photo-ccc',
+        object_id: 'obj-1',
+        status: 'live',
+        bytes: 481_920,
+        sort_order: 1,
+        signed_url: 'https://example.test/signed.jpg',
+        message: null,
+      })
+    }
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'confirm_upload',
+        arguments: { photo_id: 'photo-ccc' },
+      })
+      assert.ok(!result.isError, `unexpected error: ${textOf(result)}`)
+      assert.ok(capturedUrl.endsWith('/photos/photo-ccc'), `unexpected URL: ${capturedUrl}`)
+      const text = textOf(result)
+      assert.ok(text.includes('live'), text)
+      assert.ok(text.includes('481920'), text)
+      assert.ok(text.includes('https://example.test/signed.jpg'), text)
+    } finally {
+      global.fetch = original
+      await cleanup()
+    }
+  })
+
+  it('confirm_upload passes the server\'s next-step message through for a stale reservation', async () => {
+    const restore = mockFetch(
+      Response.json({
+        id: 'photo-ccc',
+        object_id: 'obj-1',
+        status: 'pending',
+        bytes: null,
+        sort_order: 1,
+        signed_url: null,
+        message: 'The upload reservation expired before any bytes arrived. Call create_upload_url again for a fresh token.',
+      })
+    )
+    const { client, cleanup } = await connectPair()
+    try {
+      const result = await client.callTool({
+        name: 'confirm_upload',
+        arguments: { photo_id: 'photo-ccc' },
+      })
+      const text = textOf(result)
+      assert.ok(text.includes('pending'), text)
+      assert.ok(text.includes('create_upload_url again'), text)
+      // No signed URL for a photo with no bytes behind it.
+      assert.ok(!text.includes('View:'), text)
+    } finally {
+      restore()
       await cleanup()
     }
   })

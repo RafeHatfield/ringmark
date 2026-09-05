@@ -47,6 +47,9 @@ export default async function ObjectDetailPage({
       .eq('object_id', id)
       .eq('account_id', account.id)
       .is('deleted_at', null)
+      // Pending rows are reservations with no bytes behind them yet — they have
+      // a storage_path that would sign into a URL that 404s.
+      .eq('status', 'live')
       .order('sort_order'),
   ])
 
