@@ -25,6 +25,18 @@ import {
   ErrorSchema,
   objectTypeEnum,
   objectStatusEnum,
+  MarketEventSchema,
+  MarketEventDetailSchema,
+  CreateMarketEventSchema,
+  PatchMarketEventSchema,
+  MarketEventItemSchema,
+  MarketEventTotalsSchema,
+  AddMarketItemSchema,
+  BulkAddMarketItemsSchema,
+  BulkAddResultSchema,
+  UpdateMarketItemSchema,
+  MarkSoldSchema,
+  marketEventStatusEnum,
 } from './api-schemas'
 
 function buildRegistry(): OpenAPIRegistry {
@@ -44,6 +56,17 @@ function buildRegistry(): OpenAPIRegistry {
   registry.register('CreateUploadUrl', CreateUploadUrlSchema)
   registry.register('UploadUrl', UploadUrlSchema)
   registry.register('Error', ErrorSchema)
+  registry.register('MarketEvent', MarketEventSchema)
+  registry.register('MarketEventDetail', MarketEventDetailSchema)
+  registry.register('CreateMarketEvent', CreateMarketEventSchema)
+  registry.register('PatchMarketEvent', PatchMarketEventSchema)
+  registry.register('MarketEventItem', MarketEventItemSchema)
+  registry.register('MarketEventTotals', MarketEventTotalsSchema)
+  registry.register('AddMarketItem', AddMarketItemSchema)
+  registry.register('BulkAddMarketItems', BulkAddMarketItemsSchema)
+  registry.register('BulkAddResult', BulkAddResultSchema)
+  registry.register('UpdateMarketItem', UpdateMarketItemSchema)
+  registry.register('MarkSold', MarkSoldSchema)
 
   // ── Security scheme ─────────────────────────────────────────────────────────
   registry.registerComponent('securitySchemes', 'BearerAuth', {
@@ -408,6 +431,237 @@ function buildRegistry(): OpenAPIRegistry {
       200: {
         description: 'Restored photo record with a 1-hour signed URL',
         content: { 'application/json': { schema: PhotoSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  // ── Market Events ───────────────────────────────────────────────────────────
+  //
+  // Private feature — in-person selling events. Nothing under this tag is ever
+  // reachable without a credential, and none of it appears on a public page.
+
+  const eventIdParam = z.string().uuid().openapi({ description: 'Market event UUID' })
+  const itemIdParam = z.string().uuid().openapi({ description: 'Market event item UUID' })
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/market-events',
+    tags: ['Market Events'],
+    summary: 'List market events',
+    description: 'Returns the account\'s market events, most recent first. Filter with ?status.',
+    security,
+    request: {
+      query: z.object({
+        status: marketEventStatusEnum.optional().openapi({ description: 'Filter by status' }),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Market events list',
+        content: {
+          'application/json': {
+            schema: z.object({ data: z.array(MarketEventSchema), total: z.number().int() }),
+          },
+        },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/market-events',
+    tags: ['Market Events'],
+    summary: 'Create a market event',
+    description: 'Creates an event in `planning` status. event_date is optional — a market can be planned before its date is fixed.',
+    security,
+    request: {
+      body: { content: { 'application/json': { schema: CreateMarketEventSchema } } },
+    },
+    responses: {
+      201: {
+        description: 'Created market event',
+        content: { 'application/json': { schema: MarketEventSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/market-events/{id}',
+    tags: ['Market Events'],
+    summary: 'Get a market event with its items and totals',
+    description:
+      'Returns the event, every item on it (with denormalized workshop_id, title, species ' +
+      'and a 1-hour signed thumbnail URL), and server-computed totals.',
+    security,
+    request: { params: z.object({ id: eventIdParam }) },
+    responses: {
+      200: {
+        description: 'Market event with items and totals',
+        content: { 'application/json': { schema: MarketEventDetailSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'patch',
+    path: '/api/v1/market-events/{id}',
+    tags: ['Market Events'],
+    summary: 'Update a market event',
+    security,
+    request: {
+      params: z.object({ id: eventIdParam }),
+      body: { content: { 'application/json': { schema: PatchMarketEventSchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Updated market event',
+        content: { 'application/json': { schema: MarketEventSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'delete',
+    path: '/api/v1/market-events/{id}',
+    tags: ['Market Events'],
+    summary: 'Delete a market event',
+    description:
+      'Deletes the event and its items. Items cascade at the database level. The pieces ' +
+      'themselves are untouched — only the record of them being taken to this market.',
+    security,
+    request: { params: z.object({ id: eventIdParam }) },
+    responses: {
+      204: { description: 'Deleted — no content' },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/market-events/{id}/items',
+    tags: ['Market Events'],
+    summary: 'Add a piece to a market event',
+    description:
+      'object_id accepts a workshop ID or a UUID. Any object may be added regardless of ' +
+      'status or publish state — a market piece does not need a public page. ' +
+      'asking_price_cents defaults to the object\'s price_cents. Returns 409 if the piece ' +
+      'is already on this event.',
+    security,
+    request: {
+      params: z.object({ id: eventIdParam }),
+      body: { content: { 'application/json': { schema: AddMarketItemSchema } } },
+    },
+    responses: {
+      201: {
+        description: 'Created market event item',
+        content: { 'application/json': { schema: MarketEventItemSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/market-events/{id}/items/bulk',
+    tags: ['Market Events'],
+    summary: 'Add several pieces to a market event',
+    description:
+      'Batch version of the add endpoint — the "go through and select everything you want ' +
+      'to take" path. Pieces that do not resolve, or are already on the event, are skipped ' +
+      'rather than failing the batch. Status is 200, not 201: this is not a single created ' +
+      'resource.',
+    security,
+    request: {
+      params: z.object({ id: eventIdParam }),
+      body: { content: { 'application/json': { schema: BulkAddMarketItemsSchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Added items plus a per-id reason for anything skipped',
+        content: { 'application/json': { schema: BulkAddResultSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'patch',
+    path: '/api/v1/market-events/{id}/items/{itemId}',
+    tags: ['Market Events'],
+    summary: 'Update a market event item',
+    description: 'Change the asking price or sort order for this piece at this event only.',
+    security,
+    request: {
+      params: z.object({ id: eventIdParam, itemId: itemIdParam }),
+      body: { content: { 'application/json': { schema: UpdateMarketItemSchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Updated market event item',
+        content: { 'application/json': { schema: MarketEventItemSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'delete',
+    path: '/api/v1/market-events/{id}/items/{itemId}',
+    tags: ['Market Events'],
+    summary: 'Remove a piece from a market event',
+    description: 'Removes the item only. The piece itself is untouched.',
+    security,
+    request: { params: z.object({ id: eventIdParam, itemId: itemIdParam }) },
+    responses: {
+      204: { description: 'Removed — no content' },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/market-events/{id}/items/{itemId}/mark-sold',
+    tags: ['Market Events'],
+    summary: 'Mark a piece sold at this market',
+    description:
+      'Sets sold, sold_price_cents (defaulting to the asking price) and sold_at — AND ' +
+      'updates the underlying object\'s status to `sold`. That status cascade is the one ' +
+      'place this feature reaches outside its own tables.',
+    security,
+    request: {
+      params: z.object({ id: eventIdParam, itemId: itemIdParam }),
+      body: { content: { 'application/json': { schema: MarkSoldSchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Updated market event item',
+        content: { 'application/json': { schema: MarketEventItemSchema } },
+      },
+      ...errorResponses,
+    },
+  })
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/market-events/{id}/items/{itemId}/unmark-sold',
+    tags: ['Market Events'],
+    summary: 'Undo a sale',
+    description:
+      'Clears the sold state and reverts the underlying object\'s status to `for_sale` — ' +
+      'unconditionally, not to whatever it was before. A piece taken to a market was ' +
+      'almost certainly for sale beforehand, and this avoids a redundant history column.',
+    security,
+    request: { params: z.object({ id: eventIdParam, itemId: itemIdParam }) },
+    responses: {
+      200: {
+        description: 'Updated market event item',
+        content: { 'application/json': { schema: MarketEventItemSchema } },
       },
       ...errorResponses,
     },

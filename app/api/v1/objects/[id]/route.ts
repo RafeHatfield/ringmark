@@ -86,6 +86,7 @@ export async function PATCH(
   if (parsed.species !== undefined) payload.species = parsed.species || null
   if (parsed.location_text !== undefined) payload.location_text = parsed.location_text || null
   if (parsed.private_notes !== undefined) payload.private_notes = parsed.private_notes || null
+  if (parsed.price_cents !== undefined) payload.price_cents = parsed.price_cents
   if (parsed.public_title !== undefined) payload.public_title = parsed.public_title || null
   if (parsed.public_story !== undefined) payload.public_story = parsed.public_story || null
   if (parsed.public_notes !== undefined) payload.public_notes = parsed.public_notes || null

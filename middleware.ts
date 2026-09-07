@@ -20,9 +20,15 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Every auth-gated route must be listed here. A route that is missing does
+  // not fall back to being public — it crashes, because the page calls
+  // getOrCreateAccount(), which throws when there is no session. /markets was
+  // missing and returned a 500 to anonymous visitors instead of a login
+  // redirect. If you add an admin route group, add it here in the same commit.
   const isAdminRoute =
     pathname === '/workshop' ||
     pathname.startsWith('/objects') ||
+    pathname.startsWith('/markets') ||
     pathname.startsWith('/settings') ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/oauth')

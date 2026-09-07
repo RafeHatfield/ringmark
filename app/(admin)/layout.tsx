@@ -15,6 +15,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <span className="text-xs text-bark truncate max-w-[120px]">
             {account.name}
           </span>
+          <Link href="/markets" className="text-xs text-bark/70 hover:text-bark transition-colors">
+            Markets
+          </Link>
           <Link href="/profile" className="text-xs text-bark/70 hover:text-bark transition-colors">
             Profile
           </Link>

@@ -81,6 +81,17 @@ curl http://localhost:3000/api/v1/objects \
 | `PATCH` | `/api/v1/objects/:id` | Partial update; whitelisted fields only — `public_slug` is never accepted |
 | `DELETE` | `/api/v1/objects/:id` | Delete object (children cascade) |
 | `POST` | `/api/v1/objects/:id/children` | Add child with auto flat-numbered workshop ID |
+| `GET` | `/api/v1/market-events` | List market events (private — craft markets, shows); filter with `?status` |
+| `POST` | `/api/v1/market-events` | Create a market event (starts in `planning`) |
+| `GET` | `/api/v1/market-events/:id` | Get one event, its items, and computed totals |
+| `PATCH` | `/api/v1/market-events/:id` | Partial update; also transitions `status` |
+| `DELETE` | `/api/v1/market-events/:id` | Delete event; items cascade at the DB level |
+| `POST` | `/api/v1/market-events/:id/items` | Add one object to the event (409 if already on it) |
+| `POST` | `/api/v1/market-events/:id/items/bulk` | Add many objects; skips duplicates/cross-account rather than failing the batch |
+| `PATCH` | `/api/v1/market-events/:id/items/:itemId` | Update asking price or sort order |
+| `DELETE` | `/api/v1/market-events/:id/items/:itemId` | Remove from the event; the object itself is untouched |
+| `POST` | `/api/v1/market-events/:id/items/:itemId/mark-sold` | Mark sold; cascades the object's `status` to `sold` |
+| `POST` | `/api/v1/market-events/:id/items/:itemId/unmark-sold` | Revert to unsold; `status` reverts to `for_sale` unconditionally |
 
 ### Interactive docs
 
@@ -112,6 +123,16 @@ Ringmark ships an MCP server that exposes the REST API as tools for LLM assistan
 | `save_story` | Set public title, narrative, notes, and care instructions |
 | `publish_object` | Publish or unpublish an object |
 | `upload_photo` | Upload a photo via local file path, public URL, or base64 |
+| `create_market_event` | Create a market event (name, date, location, notes) |
+| `list_market_events` | List market events, optionally filtered by status |
+| `get_market_event` | Fetch one event with its items and computed totals |
+| `update_market_event` | Update event fields or transition its status |
+| `delete_market_event` | Delete an event (items cascade) |
+| `add_market_items` | Bulk-add objects to an event by ID |
+| `remove_market_item` | Remove one object from an event |
+| `update_market_item_price` | Set an item's asking price for that event |
+| `mark_item_sold` | Mark an item sold (prep/debrief use — the live sale is recorded in the mobile admin UI, not via MCP) |
+| `unmark_item_sold` | Revert an item to unsold |
 
 ### Claude Desktop setup
 
@@ -224,6 +245,12 @@ npm run mcp          # run MCP server directly (for debugging)
 /objects/[id]/child/new     Add child object
 /objects/[id]/story         Edit public story + publish/unpublish
 /objects/[id]/qr            QR card + download
+/markets                    List market events, filterable by status, newest first
+/markets/new                Create a market event
+/markets/[id]               Market day builder — add pieces, price, mark sold
+/markets/[id]/pack          Print: packing checklist (no prices)
+/markets/[id]/price-sheet   Print: workshop ID + title + asking price, plus total
+/markets/[id]/labels        Print: one QrCard per item, label-sheet grid
 /p/[slug]                   Public story page (no auth required)
 /maker                      Public maker page — published pieces
 /api/v1/                    REST API (see above)

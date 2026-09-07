@@ -18,6 +18,7 @@ export type CreateObjectData = {
   status?: ObjectStatus | null
   private_notes?: string | null
   public_story?: string | null
+  price_cents?: number | null
 }
 
 export async function createObject(
@@ -73,6 +74,7 @@ export async function createObject(
       status: data.status || null,
       private_notes: data.private_notes?.trim() || null,
       public_story: data.public_story?.trim() || null,
+      price_cents: data.price_cents ?? null,
     })
     .select('id')
     .single()
@@ -109,6 +111,7 @@ export type UpdateObjectData = Partial<{
   public_story: string | null
   public_care: string | null
   is_published: boolean
+  price_cents: number | null
 }>
 
 export async function updateObject(

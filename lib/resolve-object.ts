@@ -6,7 +6,7 @@ import type { Database, WoodObject } from './types'
  * Mirrors the OBJECT_SELECT constant in mcp/index.ts.
  */
 export const OBJECT_SELECT =
-  'id, workshop_id, workshop_id_lower, object_type, status, title, species, species_confidence, public_slug, public_title, public_story, public_notes, public_care, location_text, private_notes, dimensions_text, finish, is_published, parent_id, root_id, lineage_confidence, account_id, created_at, updated_at' as const
+  'id, workshop_id, workshop_id_lower, object_type, status, title, species, species_confidence, public_slug, public_title, public_story, public_notes, public_care, location_text, private_notes, dimensions_text, finish, is_published, price_cents, parent_id, root_id, lineage_confidence, account_id, created_at, updated_at' as const
 
 /**
  * Resolve an object by UUID or workshop ID, scoped to the given account.

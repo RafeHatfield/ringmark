@@ -101,6 +101,9 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
   const [location, setLocation] = useState(object.location_text ?? '')
   const [stepNotes, setStepNotes] = useState(object.public_story ?? '')
   const [privateNotes, setPrivateNotes] = useState(object.private_notes ?? '')
+  const [price, setPrice] = useState(
+    object.price_cents != null ? String(object.price_cents / 100) : ''
+  )
   const [formError, setFormError] = useState('')
 
   async function handleBlurId() {
@@ -122,6 +125,16 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
     setShowParentSearch(false)
   }
 
+  function handlePriceChange(e: React.ChangeEvent<HTMLInputElement>) {
+    // Allow only digits and a single decimal point (up to 2 decimal places).
+    const val = e.target.value.replace(/[^0-9.]/g, '')
+    const parts = val.split('.')
+    const cleaned = parts.length > 2
+      ? `${parts[0]}.${parts.slice(1).join('')}`
+      : val
+    setPrice(cleaned)
+  }
+
   function handleRemoveParent() {
     setParentId(null)
     setParentDisplay(null)
@@ -133,6 +146,10 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
     if (!workshopId.trim()) { setFormError('Workshop ID is required.'); return }
     if (idError) return
     setFormError('')
+
+    const trimmedPrice = price.trim()
+    const parsedPrice = trimmedPrice ? parseFloat(trimmedPrice) : NaN
+    const priceCents = Number.isFinite(parsedPrice) ? Math.round(parsedPrice * 100) : null
 
     startTransition(async () => {
       const result = await updateObject(object.id, {
@@ -149,6 +166,7 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
         location_text: location || null,
         public_story: stepNotes || null,
         private_notes: privateNotes || null,
+        price_cents: priceCents,
       })
       if (result.error) {
         setFormError(result.error)
@@ -187,6 +205,22 @@ export default function EditObjectForm({ object, parentWorkshopId }: Props) {
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
+      </FormField>
+
+      <FormField label="Asking price" hint="optional">
+        <div className="relative">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-bark">
+            $
+          </span>
+          <input
+            value={price}
+            onChange={handlePriceChange}
+            className={`${fieldClass} pl-6`}
+            placeholder="0.00"
+            inputMode="decimal"
+            maxLength={10}
+          />
+        </div>
       </FormField>
 
       {/* Parent */}
