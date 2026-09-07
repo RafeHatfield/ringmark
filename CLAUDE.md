@@ -92,6 +92,7 @@ GET    /api/v1/docs                                 Swagger UI (no auth)
 - The storage write happens **before** the row is marked consumed. A failed storage write leaves the token live so the caller can retry; a stored-but-unfinalised row is reported to Sentry and swept.
 - `app/api/cron/sweep-pending-uploads` runs daily (`vercel.json` — Hobby allows once-daily crons only) and deletes pending rows an hour or more past expiry. Its `status = 'pending'` filter is load-bearing — a live photo must never be selected by that query. It fails closed on Vercel: no `CRON_SECRET`, no sweep (503).
 - `/api/upload` is excluded from the middleware matcher alongside `/api/mcp`: a Supabase session refresh on a multi-megabyte token-authenticated body is pure cost.
+- `bytes`, `width` and `height` are recorded by **both** upload paths. Dimensions are parsed from header bytes in `lib/photo-upload.ts` — no image library, because width and height sit in the first few dozen bytes of JPEG/PNG/WebP and a native dependency in a serverless bundle buys nothing. HEIC is always null (its size is in a nested ISO-BMFF `ispe` box), as are rows predating the column. **Null means unknown, never zero.**
 
 **Self-documenting:** `lib/api-schemas.ts` is the single source of truth. Zod schemas annotated with `.openapi()` drive both request validation and the generated OpenAPI spec (`lib/api-spec.ts`). If you add an endpoint, add the route and register it in `api-spec.ts`.
 

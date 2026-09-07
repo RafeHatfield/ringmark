@@ -209,6 +209,17 @@ export const PhotoSchema = z
     bytes: z.number().int().nullable().optional().openapi({
       description: 'Size of the stored image in bytes. Null for photos uploaded before this was recorded.',
     }),
+    width: z.number().int().nullable().optional().openapi({
+      example: 2000,
+      description:
+        'Pixel width, parsed from the image header at upload. Null when unknown — a photo ' +
+        'uploaded before this was recorded, or a HEIC, whose dimensions are not read. ' +
+        'Treat null as unknown, never as zero.',
+    }),
+    height: z.number().int().nullable().optional().openapi({
+      example: 1500,
+      description: 'Pixel height. Null under the same conditions as width.',
+    }),
   })
   .openapi('Photo')
 

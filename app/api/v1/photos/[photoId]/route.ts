@@ -33,7 +33,7 @@ export async function GET(
 
   const { data: photo } = await db
     .from('object_photos')
-    .select('id, object_id, storage_path, caption, is_public, sort_order, status, bytes, created_at, deleted_at, upload_expires_at, upload_consumed_at')
+    .select('id, object_id, storage_path, caption, is_public, sort_order, status, bytes, width, height, created_at, deleted_at, upload_expires_at, upload_consumed_at')
     .eq('id', photoId)
     .eq('account_id', account.id)
     .maybeSingle()
@@ -64,6 +64,8 @@ export async function GET(
     sort_order: photo.sort_order,
     status: photo.status,
     bytes: photo.bytes,
+    width: photo.width,
+    height: photo.height,
     created_at: photo.created_at,
     deleted_at: photo.deleted_at,
     signed_url: signedUrl,

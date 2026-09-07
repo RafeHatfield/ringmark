@@ -127,6 +127,129 @@ export function sniffImageMime(bytes: Uint8Array): AcceptedMimeType | null {
   return null
 }
 
+// ── Dimensions ────────────────────────────────────────────────────────────────
+
+export type ImageDimensions = { width: number; height: number }
+
+/**
+ * Reads pixel dimensions out of an image's header bytes.
+ *
+ * Hand-parsed rather than delegated to sharp or image-size. Dimensions live in
+ * the first few dozen bytes of every format here, so a dependency — especially a
+ * native one in a serverless bundle — buys nothing a small reader can't do.
+ *
+ * Returns null when the dimensions can't be determined. That is not an error:
+ * the columns are nullable, HEIC is deliberately unsupported (its dimensions sit
+ * in a nested ISO-BMFF `ispe` box, which is a real parser rather than a header
+ * read), and a photo is perfectly usable without them.
+ */
+export function readImageDimensions(bytes: Uint8Array): ImageDimensions | null {
+  switch (sniffImageMime(bytes)) {
+    case 'image/jpeg': return jpegDimensions(bytes)
+    case 'image/png': return pngDimensions(bytes)
+    case 'image/webp': return webpDimensions(bytes)
+    // HEIC: see above. Stored fine, just unmeasured.
+    default: return null
+  }
+}
+
+function u16be(b: Uint8Array, i: number): number {
+  return (b[i] << 8) | b[i + 1]
+}
+
+function u32be(b: Uint8Array, i: number): number {
+  return ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0
+}
+
+function u16le(b: Uint8Array, i: number): number {
+  return b[i] | (b[i + 1] << 8)
+}
+
+function u24le(b: Uint8Array, i: number): number {
+  return b[i] | (b[i + 1] << 8) | (b[i + 2] << 16)
+}
+
+/**
+ * Walks JPEG marker segments to the first Start Of Frame.
+ *
+ * The frame header is not at a fixed offset — a phone photo puts EXIF, ICC and
+ * thumbnail segments ahead of it — so the segments have to be walked rather
+ * than indexed into.
+ */
+function jpegDimensions(b: Uint8Array): ImageDimensions | null {
+  let i = 2 // past the SOI marker
+
+  while (i + 3 < b.length) {
+    // Not aligned on a marker: give up rather than guess at an offset.
+    if (b[i] !== 0xff) return null
+
+    const marker = b[i + 1]
+
+    // Padding between segments is legal and encoded as repeated 0xFF.
+    if (marker === 0xff) { i++; continue }
+
+    // Standalone markers carry no length field.
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) { i += 2; continue }
+
+    const segmentLength = u16be(b, i + 2)
+    if (segmentLength < 2) return null
+
+    // SOF0–SOF15 hold the frame header. C4 (DHT), C8 (JPG) and CC (DAC) share
+    // the marker range but are not frame headers.
+    const isStartOfFrame =
+      marker >= 0xc0 && marker <= 0xcf &&
+      marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
+
+    if (isStartOfFrame) {
+      // Payload is precision, then height, then width.
+      if (i + 8 >= b.length) return null
+      return { height: u16be(b, i + 5), width: u16be(b, i + 7) }
+    }
+
+    i += 2 + segmentLength
+  }
+
+  return null
+}
+
+/** PNG puts width and height at a fixed offset in the mandatory IHDR chunk. */
+function pngDimensions(b: Uint8Array): ImageDimensions | null {
+  if (b.length < 24) return null
+  if (String.fromCharCode(b[12], b[13], b[14], b[15]) !== 'IHDR') return null
+  return { width: u32be(b, 16), height: u32be(b, 20) }
+}
+
+/** WebP has three container variants, each storing its size differently. */
+function webpDimensions(b: Uint8Array): ImageDimensions | null {
+  const chunk = b.length >= 16 ? String.fromCharCode(b[12], b[13], b[14], b[15]) : ''
+
+  // Lossy: VP8 keyframe header, behind a 3-byte start code.
+  if (chunk === 'VP8 ') {
+    if (b.length < 30) return null
+    if (b[23] !== 0x9d || b[24] !== 0x01 || b[25] !== 0x2a) return null
+    return { width: u16le(b, 26) & 0x3fff, height: u16le(b, 28) & 0x3fff }
+  }
+
+  // Lossless: 14 bits each, packed little-endian, stored as size-1.
+  if (chunk === 'VP8L') {
+    if (b.length < 25) return null
+    if (b[20] !== 0x2f) return null
+    const packed = (b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24)) >>> 0
+    return {
+      width: (packed & 0x3fff) + 1,
+      height: ((packed >>> 14) & 0x3fff) + 1,
+    }
+  }
+
+  // Extended (alpha, animation, EXIF): canvas size as 24-bit, also size-1.
+  if (chunk === 'VP8X') {
+    if (b.length < 30) return null
+    return { width: u24le(b, 24) + 1, height: u24le(b, 27) + 1 }
+  }
+
+  return null
+}
+
 // ── Reservation state ─────────────────────────────────────────────────────────
 
 export type ReservationState = 'usable' | 'consumed' | 'expired'
