@@ -30,6 +30,21 @@ const MINIMAL_PNG = Buffer.from(
   'hex'
 )
 
+/** Real 17×43 PNG, so dimension parsing is asserted against a non-square image. */
+const PNG_17x43 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAABEAAAArCAIAAAAR7vRmAAAAMElEQVR4nO3QsQ0AIBDDQH/Yf2ckmCDty+6v8UwOZWmB5hX6okGDBo0PfqEvGraZC7S5AFwqWXPZAAAAAElFTkSuQmCC',
+  'base64',
+)
+
+/** Valid HEIC header. Accepted for storage, but deliberately not measured. */
+const HEIC_HEADER = (() => {
+  const b = Buffer.alloc(64)
+  b.writeUInt32BE(64, 0)
+  b.write('ftyp', 4, 'ascii')
+  b.write('heic', 8, 'ascii')
+  return b
+})()
+
 const RUN_TAG = `DIRECTUP${Date.now()}`
 
 let objectId = ''
@@ -308,6 +323,57 @@ test('the stored extension follows the actual bytes, not the claimed filename', 
   const res = await put(request, r.upload_token, MINIMAL_PNG, 'image/heic')
   expect(res.status()).toBe(200)
   expect((await res.json()).storage_path).toMatch(/\.png$/)
+})
+
+// ── Dimensions ────────────────────────────────────────────────────────────────
+
+test('dimensions are recorded from the uploaded bytes', async ({ request }) => {
+  const r = await reserve(request, { filename: 'sized.png' })
+  const res = await put(request, r.upload_token, PNG_17x43)
+  expect(res.status()).toBe(200)
+
+  const photo = await res.json()
+  expect(photo.width).toBe(17)
+  expect(photo.height).toBe(43)
+  expect(photo.bytes).toBe(PNG_17x43.byteLength)
+
+  // And they survive the round trip through the confirm endpoint.
+  const confirm = await request.get(`/api/v1/photos/${r.photo_id}`, { headers: apiHeaders() })
+  const fetched = await confirm.json()
+  expect(fetched.width).toBe(17)
+  expect(fetched.height).toBe(43)
+})
+
+test('HEIC uploads succeed but are left unmeasured', async ({ request }) => {
+  // The dimensions live in a nested ISO-BMFF box we deliberately do not parse.
+  // Null must mean unknown here — never zero, which would break any layout
+  // arithmetic downstream.
+  const r = await reserve(request, { filename: 'phone.heic' })
+  const res = await put(request, r.upload_token, HEIC_HEADER, 'image/heic')
+  expect(res.status()).toBe(200)
+
+  const photo = await res.json()
+  expect(photo.status).toBe('live')
+  expect(photo.width).toBeNull()
+  expect(photo.height).toBeNull()
+  expect(photo.bytes).toBe(HEIC_HEADER.byteLength)
+})
+
+test('the multipart upload path records dimensions identically', async ({ request }) => {
+  // Both upload routes must agree, or the two paths quietly diverge.
+  const up = await request.post(`/api/v1/objects/${objectId}/photos`, {
+    headers: { Authorization: `Bearer ${process.env.RINGMARK_API_KEY ?? ''}` },
+    multipart: {
+      file: { name: 'multipart.png', mimeType: 'image/png', buffer: PNG_17x43 },
+      caption: 'Via multipart',
+    },
+  })
+  expect(up.status()).toBe(201)
+
+  const photo = await up.json()
+  expect(photo.width).toBe(17)
+  expect(photo.height).toBe(43)
+  expect(photo.bytes).toBe(PNG_17x43.byteLength)
 })
 
 // ── confirm_upload backing endpoint ───────────────────────────────────────────

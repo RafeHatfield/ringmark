@@ -128,6 +128,9 @@ export type ObjectPhoto = {
   upload_expires_at: string | null
   upload_consumed_at: string | null
   bytes: number | null
+  /** Pixel dimensions parsed at upload. Null when unknown (legacy row, or HEIC). */
+  width: number | null
+  height: number | null
 }
 
 export type ObjectPhotoInsert = {
@@ -148,6 +151,8 @@ export type ObjectPhotoInsert = {
   upload_expires_at?: string | null
   upload_consumed_at?: string | null
   bytes?: number | null
+  width?: number | null
+  height?: number | null
 }
 
 export type ObjectPhotoUpdate = Partial<ObjectPhotoInsert>
