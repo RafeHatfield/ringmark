@@ -189,7 +189,11 @@ test('tools/list returns the full ringmark tool set', async ({ request }) => {
   expect(names).toContain('add_market_items')
   expect(names).toContain('mark_item_sold')
   expect(names).toContain('unmark_item_sold')
-  expect(names).toHaveLength(25)
+  // Signed direct upload — the preferred photo path from a hosted client, since
+  // it keeps the image bytes out of the calling model's context entirely
+  expect(names).toContain('create_upload_url')
+  expect(names).toContain('confirm_upload')
+  expect(names).toHaveLength(27)
 })
 
 // ── Remote destructive-tool guards ───────────────────────────────────────────
