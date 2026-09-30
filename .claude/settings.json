@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "input=$(cat); cmd=$(echo \"$input\" | jq -r '.tool_input.command // empty'); if echo \"$cmd\" | grep -qE '^git push'; then cd /Users/rafehatfield/development/ringmark && PATH=\"/opt/homebrew/bin:$PATH\" npx next lint --quiet 2>&1 && PATH=\"/opt/homebrew/bin:$PATH\" npx tsc --noEmit 2>&1 || echo '{\"decision\":\"block\",\"reason\":\"Lint or type errors found — fix before pushing\"}'; fi",
+            "command": "input=$(cat); cmd=$(echo \"$input\" | jq -r '.tool_input.command // empty'); if echo \"$cmd\" | grep -qE '^git push'; then cd /Users/rafehatfield/development/ringmark && PATH=\"/Users/rafehatfield/.local/share/fnm/aliases/default/bin:/opt/homebrew/bin:$PATH\" npx next lint --quiet 2>&1 && PATH=\"/Users/rafehatfield/.local/share/fnm/aliases/default/bin:/opt/homebrew/bin:$PATH\" npx tsc --noEmit 2>&1 || echo '{\"decision\":\"block\",\"reason\":\"Lint or type errors found — fix before pushing\"}'; fi",
             "timeout": 60
           }
         ]
@@ -66,6 +66,6 @@
     ]
   },
   "env": {
-    "PATH": "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
+    "PATH": "/Users/rafehatfield/.local/share/fnm/aliases/default/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
   }
 }
