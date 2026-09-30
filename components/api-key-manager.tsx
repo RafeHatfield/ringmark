@@ -6,6 +6,15 @@ import type { ApiKey } from '@/lib/types'
 
 type KeyRow = Pick<ApiKey, 'id' | 'key_prefix' | 'label' | 'created_at' | 'last_used_at'>
 
+// This component renders on the server and again in the browser, so the date
+// must not depend on either side's default locale or timezone — otherwise
+// hydration fails (Sentry RINGMARK-6).
+function formatKeyDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', {
+    year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
+  })
+}
+
 export function ApiKeyManager({ keys }: { keys: KeyRow[] }) {
   const [mode, setMode]           = useState<'list' | 'creating' | 'showing'>('list')
   const [label, setLabel]         = useState('')
@@ -127,9 +136,9 @@ export function ApiKeyManager({ keys }: { keys: KeyRow[] }) {
                 <p className="text-xs text-bark mt-0.5 truncate">
                   {k.label ?? 'Unlabelled'}
                   {' · '}
-                  Created {new Date(k.created_at).toLocaleDateString()}
+                  Created {formatKeyDate(k.created_at)}
                   {k.last_used_at && (
-                    <> · Last used {new Date(k.last_used_at).toLocaleDateString()}</>
+                    <> · Last used {formatKeyDate(k.last_used_at)}</>
                   )}
                 </p>
               </div>
