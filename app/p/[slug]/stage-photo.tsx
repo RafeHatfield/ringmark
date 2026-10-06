@@ -13,12 +13,6 @@ interface Props {
   label: string
 }
 
-const camIcon = (
-  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#B0612F" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 15-3.5-3.5L9 19"/>
-  </svg>
-)
-
 export function StagePhoto({ photos, label }: Props) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [animating, setAnimating] = useState(false)
@@ -61,13 +55,8 @@ export function StagePhoto({ photos, label }: Props) {
 
   const currentPhoto = lightboxIndex !== null ? photos[lightboxIndex] : null
 
-  if (!first?.url) {
-    return (
-      <div className="rounded-[11px] bg-sand aspect-[16/10] flex items-center justify-center">
-        {camIcon}
-      </div>
-    )
-  }
+  // A stage with no photos renders nothing — the story text follows the label directly.
+  if (!first?.url) return null
 
   return (
     <>
