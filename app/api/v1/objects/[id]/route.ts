@@ -4,6 +4,7 @@ import { resolveObject } from '@/lib/resolve-object'
 import { PatchObjectSchema } from '@/lib/api-schemas'
 import { computeRootId } from '@/lib/lineage-utils'
 import type { WoodObjectUpdate } from '@/lib/types'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 
 const patchSchema = PatchObjectSchema
 
@@ -128,6 +129,7 @@ export async function PATCH(
     return Response.json({ error: updateError?.message ?? 'Update failed' }, { status: 500 })
   }
 
+  revalidatePublicStories()
   return Response.json(updated)
 }
 
@@ -199,5 +201,6 @@ export async function DELETE(
     return Response.json({ error: deleteError.message }, { status: 500 })
   }
 
+  revalidatePublicStories()
   return new Response(null, { status: 204 })
 }

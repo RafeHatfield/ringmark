@@ -27,6 +27,7 @@ import {
   reservationState,
   sniffImageMime,
 } from '@/lib/photo-upload'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -178,5 +179,6 @@ export async function PUT(request: Request) {
     .from(BUCKET)
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRY_SECONDS)
 
+  revalidatePublicStories()
   return Response.json({ ...updated, signed_url: signedData?.signedUrl ?? null })
 }

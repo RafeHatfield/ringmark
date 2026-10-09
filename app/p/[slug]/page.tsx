@@ -2,13 +2,23 @@ import { cache } from 'react'
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { APP_URL, SIGNED_URL_EXPIRY, typeLabel } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
 import { PublicFooter } from '@/components/public-chrome'
 import { signPathsBatch } from '@/lib/signed-urls'
 import { StagePhoto } from './stage-photo'
+
+// Served from the full-route cache: a QR scan must not invoke a function.
+// There is deliberately no session read here — the owner sees the same page
+// as a buyer. Writes purge this cache via revalidatePublicStories(); the timed
+// revalidate exists only so cached signed photo URLs are replaced before they
+// expire (SIGNED_URL_EXPIRY is 3600s).
+export const revalidate = 3000
+export const dynamicParams = true
+export function generateStaticParams() {
+  return []
+}
 
 // Shared leaf-object lookup for generateMetadata + the page body — cache()
 // dedupes the query to one call per request regardless of how many times
@@ -66,39 +76,23 @@ export default async function PublicStoryPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const supabase = await createClient()
 
-  // Round 1: session + leaf object (by slug)
-  const [
-    { data: { user } },
-    object,
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    getPublishedObject(slug),
-  ])
+  const object = await getPublishedObject(slug)
 
   if (!object) {
     return <NotFound message="This piece could not be found." />
   }
 
-  // Round 2: ownership + account data in parallel while we start building the lineage
-  const admin = createAdminClient()
-  const [ownerCheck, { data: accountData }] = await Promise.all([
-    user
-      ? supabase.from('accounts').select('id').eq('id', object.account_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    admin
-      .from('accounts')
-      .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url, handle')
-      .eq('id', object.account_id)
-      .maybeSingle(),
-  ])
-
-  const isOwner = !!ownerCheck?.data
-
-  if (!object.is_published && !isOwner) {
+  if (!object.is_published) {
     return <NotFound message="This piece's story hasn't been published yet." />
   }
+
+  const admin = createAdminClient()
+  const { data: accountData } = await admin
+    .from('accounts')
+    .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url, handle')
+    .eq('id', object.account_id)
+    .maybeSingle()
 
   // Build lineage chain root → leaf: one query fetches the whole tree by
   // root_id, then an in-memory walk from the leaf back to the root via
@@ -233,19 +227,6 @@ export default async function PublicStoryPage({
       `}</style>
 
       <div className="min-h-screen bg-paper text-ink font-sans" style={{ WebkitFontSmoothing: 'antialiased' }}>
-        {isOwner && (
-          <div className="bg-sand border-b border-hairline">
-            <div className="max-w-[480px] mx-auto px-[22px] py-[10px] flex items-center justify-between">
-              <span className="text-[12px] text-bark">
-                {object.is_published ? 'Published · public view' : 'Draft · not yet published'}
-              </span>
-              <Link href={`/objects/${object.id}/story`} className="text-[12px] text-cedar hover:text-heartwood transition-colors">
-                Edit story →
-              </Link>
-            </div>
-          </div>
-        )}
-
         <main className="max-w-[480px] mx-auto px-[22px] pb-8">
           <article>
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />

@@ -73,7 +73,7 @@ Never ship a QR code pointing at a `*.vercel.app` preview URL — set `NEXT_PUBL
 8. Add private notes and optional public story text per object.
 9. Publish a public story page for a finished piece.
 10. One QR code per object — same URL for buyer and maker.
-11. Logged-in maker sees admin view at that URL; buyer sees public story.
+11. Everyone sees the same public story at that URL, maker included; the page is cached and reads no session. (Changed 2026-10-08: the owner view made every scan a server render.)
 12. Search quickly by workshop ID.
 13. Produce useful public pages even when lineage is incomplete.
 
@@ -117,15 +117,16 @@ A piece of wood that is physically cut into multiple pieces creates **child reco
 
 This distinction keeps the data model intuitive and prevents explosion of records.
 
-### One QR, two experiences
+### One QR, one page
 
 ```
 /p/{public_slug}
 ```
 
-- Anonymous visitor + published → public story page
-- Anonymous visitor + unpublished → simple "not yet published" placeholder
-- Logged-in owner → admin object view (full edit access)
+- Published → public story page, identical for every viewer including the owner
+- Unpublished → simple "not yet published" placeholder
+
+The page is served from the full-route cache and reads no session (decision 2026-10-08). The owner edits from `/objects/[id]`.
 
 The public slug must never grant edit access. Authorization is always verified server-side.
 
@@ -806,7 +807,7 @@ The POC is complete when you can run this scenario without friction:
 10. Go to Edit Public Story. Write a short story. Confirm care instructions. Publish.
 11. Download QR. Print it.
 12. Scan the QR from another device (not logged in). Confirm public page looks correct. Confirm no private notes visible.
-13. Scan the same QR while logged in. Confirm you land on the admin view.
+13. Scan the same QR while logged in. Confirm you see the same public page, with no owner banner.
 14. Search `rh1` — confirm all children appear.
 15. Mark one photo private on `RH1-3`. Confirm it disappears from the public page.
 
@@ -842,7 +843,7 @@ These should be verified before declaring the POC done:
 - [ ] Anonymous user cannot access any `/objects/` routes
 - [ ] Anonymous user on `/p/[slug]` sees public page (if published)
 - [ ] Anonymous user on `/p/[slug]` sees placeholder (if unpublished)
-- [ ] Logged-in owner on `/p/[slug]` is redirected to admin view
+- [ ] Logged-in owner on `/p/[slug]` sees the same public page as a buyer
 - [ ] Non-owner (if another account exists) cannot access admin view
 
 **Data privacy:**

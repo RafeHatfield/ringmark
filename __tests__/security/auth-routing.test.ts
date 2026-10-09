@@ -1,26 +1,32 @@
 /**
- * Auth routing contract tests for /p/[slug].
+ * Contract tests for /p/[slug], the public story page.
  *
- * The public page has two critical security properties:
+ * The page is served from the full-route cache (ISR). That gives it one
+ * overriding property: it must be identical for every viewer. Anything that
+ * depends on the request — a session, a cookie, a header — would either make
+ * the route dynamic again (every QR scan becomes a function invocation, which
+ * is the Vercel cost this design exists to avoid) or, worse, be rendered once
+ * for one viewer and then served to everyone.
  *
- *   1. OWNER DETECTION: a logged-in user who owns the object sees the public
- *      page with an edit bar (isOwner = true) rather than being redirected.
- *      This detection MUST happen BEFORE the is_published gate so that owners
- *      can preview their own unpublished drafts.
+ * So the invariants are:
  *
- *   2. PUBLISHED GATE: non-owners must only see the full public page when
- *      is_published is true. Unpublished objects must show a holding message.
+ *   1. NO SESSION READ. The page never calls auth.getUser(), never creates the
+ *      cookie-backed Supabase client, never reads cookies() or headers().
+ *      The owner sees exactly what a buyer sees and edits from /objects/[id].
  *
- * These tests parse app/p/[slug]/page.tsx as source text and assert that:
- *   - The server-side auth check (auth.getUser) is present
- *   - The owner detection (isOwner flag) and edit bar exist
- *   - The OWNER DETECTION appears BEFORE the is_published gate (ordering invariant)
- *   - The public data SELECT only runs after all gates pass
- *   - Slugs not found in the DB return a not-found response (no crash, no redirect)
+ *   2. PUBLISHED GATE. Unpublished objects show a holding message, for
+ *      everyone — there is no owner preview on this route any more.
  *
- * Source-text tests cannot prove correctness at runtime; they are regression
- * guards that break loudly if the auth routing logic is accidentally reordered
- * or removed during a refactor.
+ *   3. CACHE CONTRACT. The route opts into ISR explicitly, its timed
+ *      revalidate is shorter than the signed photo URL lifetime (so a cached
+ *      page can never outlive its image links), and every write path that can
+ *      change a public page purges the cache via revalidatePublicStories().
+ *
+ *   4. MIDDLEWARE STAYS OFF THE PUBLIC PATH. A middleware invocation per scan
+ *      is the same cost in a different bucket.
+ *
+ * These are source-text regression guards, not runtime proofs. They break
+ * loudly if someone reintroduces a session read or forgets the purge.
  */
 
 import { describe, it } from 'node:test'
@@ -28,122 +34,108 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const src = readFileSync(resolve('./app/p/[slug]/page.tsx'), 'utf8')
+const read = (p: string) => readFileSync(resolve(p), 'utf8')
 
-// generateMetadata has its own, unrelated is_published check (for SEO — it always
-// falls back to generic metadata for unpublished objects, no ownership concept
-// involved). Scope ordering assertions to the page component body so they test
-// the actual owner-vs-gate invariant instead of tripping on generateMetadata's check.
+const src = read('./app/p/[slug]/page.tsx')
+const ogSrc = read('./app/p/[slug]/opengraph-image.tsx')
+const landingSrc = read('./app/page.tsx')
+const middlewareSrc = read('./middleware.ts')
+const constantsSrc = read('./lib/constants.ts')
+
 const pageBodySrc = src.slice(src.indexOf('export default async function PublicStoryPage'))
 
 describe('auth routing — /p/[slug]', () => {
-  it('server-side auth: supabase.auth.getUser() is called (not a client-side hook)', () => {
-    assert.ok(
-      src.includes('auth.getUser()'),
-      'must call supabase.auth.getUser() to identify the current user server-side',
-    )
+  it('reads no session: no auth.getUser(), no cookie-backed client, no cookies()/headers()', () => {
+    for (const marker of ['auth.getUser()', "from '@/lib/supabase/server'", 'cookies()', 'headers()', 'isOwner']) {
+      assert.ok(
+        !src.includes(marker),
+        `/p/[slug] must not contain "${marker}" — the page is cached and must be identical for every viewer`,
+      )
+    }
   })
 
-  it('owner detection sets isOwner flag server-side (not a client-side check)', () => {
-    assert.ok(
-      src.includes('isOwner'),
-      'must set isOwner flag server-side based on account membership — never trust client state for ownership',
-    )
+  it('opts into the full-route cache explicitly', () => {
+    assert.ok(/export const revalidate = \d+/.test(src), 'page must export a numeric revalidate')
+    assert.ok(src.includes('export function generateStaticParams'), 'page must export generateStaticParams so dynamic slugs are cached on demand')
   })
 
-  it('the auth check query selects account_id so ownership can be compared', () => {
+  it('timed revalidate is shorter than the signed photo URL lifetime', () => {
+    const revalidate = Number(/export const revalidate = (\d+)/.exec(src)?.[1])
+    const expiry = Number(/export const SIGNED_URL_EXPIRY = (\d+)/.exec(constantsSrc)?.[1])
+    assert.ok(Number.isFinite(revalidate) && Number.isFinite(expiry), 'both numbers must be parseable')
     assert.ok(
-      src.includes('account_id'),
-      'the initial auth-check SELECT must include account_id to compare against the session account',
-    )
-  })
-
-  it('owner identity is established by comparing account ids (not user ids)', () => {
-    // The accounts table maps user → account; ownership is at the account level.
-    // The page fetches object.account_id and checks membership in the accounts table.
-    assert.ok(
-      src.includes('object.account_id'),
-      'ownership check must compare against object.account_id',
-    )
-  })
-
-  it('owner sees an edit bar (not a redirect) — shows public view with edit link', () => {
-    assert.ok(
-      src.includes('isOwner') && src.includes('/story'),
-      'owner must see the public page with an edit bar linking to the story editor',
-    )
-  })
-
-  it('ORDERING: owner detection occurs BEFORE the is_published gate', () => {
-    // Critical invariant: owners must be able to preview their own unpublished drafts.
-    // If the is_published gate fired first, owners would hit the "not published yet"
-    // wall instead of seeing their draft with the edit bar.
-    const isOwnerSetIdx = pageBodySrc.indexOf('isOwner = ')
-    const publishedGateIdx = pageBodySrc.indexOf('!object.is_published')
-
-    assert.ok(isOwnerSetIdx !== -1, 'isOwner flag must be set server-side')
-    assert.ok(publishedGateIdx !== -1, 'is_published gate must exist')
-    assert.ok(
-      isOwnerSetIdx < publishedGateIdx,
-      'isOwner detection MUST appear before the is_published check — ' +
-      'owners of unpublished objects must be able to preview their own drafts',
+      revalidate < expiry,
+      `revalidate (${revalidate}s) must be below SIGNED_URL_EXPIRY (${expiry}s) or a cached page can serve expired image links`,
     )
   })
 
   it('unknown slug: returns a not-found message (no crash, no redirect)', () => {
-    assert.ok(
-      src.includes('if (!object)'),
-      'must handle a slug that does not exist in the DB with a graceful message',
-    )
+    assert.ok(src.includes('if (!object)'), 'must handle a slug that does not exist in the DB with a graceful message')
   })
 
-  it('non-owners see an explanatory message for unpublished objects (not a blank page)', () => {
-    // JSX encodes apostrophes as &apos; — match both forms
+  it('unpublished objects show an explanatory message to everyone (there is no owner preview)', () => {
+    assert.ok(pageBodySrc.includes('if (!object.is_published)'), 'is_published gate must exist and must not be conditioned on a viewer')
     assert.ok(
       src.includes("hasn&apos;t been published yet") ||
       src.includes("hasn't been published yet") ||
       src.includes('not been published'),
-      'unpublished objects must show an explanatory message to non-owners',
+      'unpublished objects must show an explanatory message',
     )
   })
 
-  it('ORDERING: public data SELECT only runs after both auth gates pass', () => {
-    // The page fetches the object (including public fields) in parallel with the
-    // user session for performance. The key ordering invariant is that the auth
-    // gate (isOwner check + is_published gate) fires before any data is rendered.
-    // We verify: isOwner is set before the is_published gate, and the gate fires
-    // before the JSX render path (indicated by the owner edit bar).
-    const publicSelectMarker = "'id, public_slug, account_id, is_published"
-    const isOwnerSetIdx = pageBodySrc.indexOf('isOwner = ')
-    const publishedGateIdx = pageBodySrc.indexOf('!object.is_published')
-    const publicSelectIdx = src.indexOf(publicSelectMarker)
-
-    assert.ok(isOwnerSetIdx !== -1, 'isOwner flag must be set server-side')
-    assert.ok(publicSelectIdx !== -1, 'public data SELECT must exist')
-    assert.ok(
-      isOwnerSetIdx < publishedGateIdx,
-      'isOwner detection must come before the is_published gate',
-    )
-    assert.ok(
-      publishedGateIdx !== -1,
-      'public data SELECT must come AFTER the is_published gate',
-    )
+  it('ORDERING: the is_published gate fires before the lineage and photo fetches', () => {
+    const gateIdx = pageBodySrc.indexOf('!object.is_published')
+    const lineageIdx = pageBodySrc.indexOf(".eq('root_id'")
+    const photosIdx = pageBodySrc.indexOf(".from('object_photos')")
+    assert.ok(gateIdx !== -1 && lineageIdx !== -1 && photosIdx !== -1, 'gate, lineage and photo queries must all exist')
+    assert.ok(gateIdx < lineageIdx && gateIdx < photosIdx, 'no public data may be fetched before the is_published gate')
   })
 
   it('photos are filtered by is_public = true on the public page', () => {
-    assert.ok(
-      src.includes(".eq('is_public', true)"),
-      'photo query on the public page must filter to is_public = true',
-    )
+    assert.ok(src.includes(".eq('is_public', true)"), 'photo query on the public page must filter to is_public = true')
+  })
+})
+
+describe('cache contract — public pages', () => {
+  it('the story OG image is cached too (crawlers fetch it on every share)', () => {
+    assert.ok(/export const revalidate = \d+/.test(ogSrc), 'opengraph-image must export revalidate')
+    assert.ok(ogSrc.includes('export function generateStaticParams'), 'opengraph-image must export generateStaticParams')
+    assert.ok(!ogSrc.includes('cookies()') && !ogSrc.includes('auth.getUser()'), 'opengraph-image must not read the request')
   })
 
-  it('is_published gate is applied to the public data fetch', () => {
-    // The leaf-object query is shared between generateMetadata and the page body
-    // (cache()'d so the owner can still preview unpublished drafts), so is_published
-    // can't be a blanket SQL filter — it's enforced as an explicit app-level check.
-    assert.ok(
-      src.includes('!object.is_published'),
-      'public data fetch must include an explicit object.is_published check as a safety net',
-    )
+  it('the landing page reads no session (its signed-in redirect lives in middleware)', () => {
+    assert.ok(!landingSrc.includes("from '@/lib/supabase/server'") && !landingSrc.includes('auth.getUser()'), 'app/page.tsx must not read the session')
+    assert.ok(middlewareSrc.includes("pathname === '/'"), 'middleware must own the / → /workshop redirect')
+  })
+
+  it('middleware does not match the public surface', () => {
+    // The matcher is a negative lookahead; each public prefix must appear in it.
+    // (Searching the whole file rather than a captured matcher: the pattern
+    // contains "[^/]", which defeats a naive "up to the closing bracket" regex.)
+    const matcherStart = middlewareSrc.indexOf('matcher:')
+    assert.ok(matcherStart !== -1, 'middleware must export a matcher')
+    const matcher = middlewareSrc.slice(matcherStart)
+    for (const excluded of ['|p/|', '|maker|', '|[^/]+/maker$|']) {
+      assert.ok(matcher.includes(excluded), `middleware matcher must exclude "${excluded}"`)
+    }
+  })
+
+  it('every write path that can change a public page purges the cache', () => {
+    const mustPurge = [
+      './actions/story.ts',
+      './app/api/v1/objects/[id]/route.ts',
+      './app/api/v1/objects/[id]/photos/route.ts',
+      './app/api/v1/objects/[id]/photos/[photoId]/route.ts',
+      './app/api/v1/objects/[id]/photos/[photoId]/restore/route.ts',
+      './app/api/upload/route.ts',
+    ]
+    for (const file of mustPurge) {
+      assert.ok(read(file).includes('revalidatePublicStories()'), `${file} must call revalidatePublicStories() after a successful write`)
+    }
+    // The server actions for objects and photos purge per slug instead; either is acceptable.
+    for (const file of ['./actions/objects.ts', './actions/photos.ts']) {
+      const s = read(file)
+      assert.ok(s.includes('revalidatePath(`/p/${') || s.includes('revalidatePublicStories()'), `${file} must revalidate the public page it changes`)
+    }
   })
 })

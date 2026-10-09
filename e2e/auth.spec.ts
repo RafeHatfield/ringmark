@@ -65,6 +65,11 @@ test.describe('auth — already authenticated', () => {
     await expect(page).toHaveURL('/workshop')
   })
 
+  test('visiting / while logged in redirects to /workshop (middleware, not the page)', async ({ page }) => {
+    await page.goto('/')
+    await expect(page).toHaveURL('/workshop')
+  })
+
   test('sign out button is visible in the admin header', async ({ page }) => {
     await page.goto('/workshop')
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
