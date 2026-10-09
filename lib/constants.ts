@@ -35,6 +35,13 @@ export const OBJECT_STATUSES: { value: ObjectStatus; label: string }[] = [
   { value: 'scrapped', label: 'Scrapped' },
 ]
 
+/**
+ * Statuses that mean "this is a finished piece", not a stage on the way to one.
+ * The maker page lists only these; a published log or blank still has its own
+ * /p/[slug] story page, it just doesn't belong in the portfolio.
+ */
+export const FINISHED_STATUSES: ObjectStatus[] = ['finished', 'for_sale', 'sold', 'gifted']
+
 export const SPECIES_CONFIDENCE_LEVELS: { value: SpeciesConfidence; label: string }[] = [
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'likely', label: 'Likely' },
