@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { APP_URL } from '@/lib/constants'
+import { APP_URL, FINISHED_STATUSES } from '@/lib/constants'
 import { MakerProfile, makerMetadata } from '@/components/maker-profile'
 
 type Props = { params: Promise<{ handle: string }> }
@@ -33,11 +33,14 @@ export default async function HandleMakerPage({ params }: Props) {
 
   if (!account) notFound()
 
+  // Finished work only — a published log or blank has its own story page but isn't portfolio.
+  // Public fields only, never private_notes / location_text / workshop_id.
   const { data: pieces } = await admin
     .from('wood_objects')
     .select('public_slug, public_title, title, species, updated_at')
     .eq('account_id', account.id)
     .eq('is_published', true)
+    .in('status', FINISHED_STATUSES)
     .order('updated_at', { ascending: false })
 
   return <MakerProfile account={account} pieces={pieces} canonicalUrl={`${APP_URL}/${handle}/maker`} />
