@@ -1,14 +1,27 @@
 import { cache } from 'react'
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { APP_URL, SIGNED_URL_EXPIRY, typeLabel } from '@/lib/constants'
+import { APP_URL, PUBLIC_PHOTO_URL_EXPIRY, typeLabel } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
 import { PublicFooter } from '@/components/public-chrome'
 import { signPathsBatch } from '@/lib/signed-urls'
 import { StagePhoto } from './stage-photo'
+
+// Served from the full-route cache: a QR scan must not invoke a function.
+// There is deliberately no session read here — the owner sees the same page
+// as a buyer. Freshness comes from writes purging this cache via
+// revalidatePublicStories(); the daily timed revalidate is a backstop for a
+// purge that was missed, not the mechanism. Stale pages are served while
+// regenerating, which is why the photo URLs inside use
+// PUBLIC_PHOTO_URL_EXPIRY rather than the admin lifetime.
+export const revalidate = 86400
+export const dynamicParams = true
+export function generateStaticParams() {
+  return []
+}
 
 // Shared leaf-object lookup for generateMetadata + the page body — cache()
 // dedupes the query to one call per request regardless of how many times
@@ -66,39 +79,24 @@ export default async function PublicStoryPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const supabase = await createClient()
 
-  // Round 1: session + leaf object (by slug)
-  const [
-    { data: { user } },
-    object,
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    getPublishedObject(slug),
-  ])
+  const object = await getPublishedObject(slug)
 
-  if (!object) {
-    return <NotFound message="This piece could not be found." />
-  }
+  // A real 404: a 200 "not found" would be cached per random slug and read by
+  // search engines as a soft 404. Unpublished objects are different — that
+  // placeholder is a real state, and publishing purges it.
+  if (!object) notFound()
 
-  // Round 2: ownership + account data in parallel while we start building the lineage
-  const admin = createAdminClient()
-  const [ownerCheck, { data: accountData }] = await Promise.all([
-    user
-      ? supabase.from('accounts').select('id').eq('id', object.account_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    admin
-      .from('accounts')
-      .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url, handle')
-      .eq('id', object.account_id)
-      .maybeSingle(),
-  ])
-
-  const isOwner = !!ownerCheck?.data
-
-  if (!object.is_published && !isOwner) {
+  if (!object.is_published) {
     return <NotFound message="This piece's story hasn't been published yet." />
   }
+
+  const admin = createAdminClient()
+  const { data: accountData } = await admin
+    .from('accounts')
+    .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url, handle')
+    .eq('id', object.account_id)
+    .maybeSingle()
 
   // Build lineage chain root → leaf: one query fetches the whole tree by
   // root_id, then an in-memory walk from the leaf back to the root via
@@ -171,7 +169,7 @@ export default async function PublicStoryPage({
 
   // Batch-generate signed URLs for every photo across all steps
   const allPaths = [...photosByStep.values()].flatMap(ps => ps.map(p => p.path))
-  const signedByPath = await signPathsBatch(admin.storage, 'object-photos', allPaths, SIGNED_URL_EXPIRY)
+  const signedByPath = await signPathsBatch(admin.storage, 'object-photos', allPaths, PUBLIC_PHOTO_URL_EXPIRY)
 
   // Annotate each step with its display label and resolved photo array
   const steps = chain.map(step => {
@@ -233,19 +231,6 @@ export default async function PublicStoryPage({
       `}</style>
 
       <div className="min-h-screen bg-paper text-ink font-sans" style={{ WebkitFontSmoothing: 'antialiased' }}>
-        {isOwner && (
-          <div className="bg-sand border-b border-hairline">
-            <div className="max-w-[480px] mx-auto px-[22px] py-[10px] flex items-center justify-between">
-              <span className="text-[12px] text-bark">
-                {object.is_published ? 'Published · public view' : 'Draft · not yet published'}
-              </span>
-              <Link href={`/objects/${object.id}/story`} className="text-[12px] text-cedar hover:text-heartwood transition-colors">
-                Edit story →
-              </Link>
-            </div>
-          </div>
-        )}
-
         <main className="max-w-[480px] mx-auto px-[22px] pb-8">
           <article>
             <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />

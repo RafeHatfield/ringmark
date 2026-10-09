@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { RingsIcon } from '@/components/public-chrome'
 
 export const metadata: Metadata = {
@@ -30,13 +28,9 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://ringmark.org' },
 }
 
-export default async function LandingPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (user) redirect('/workshop')
+// Static: no session read here. Middleware still runs on / (it owns the
+// signed-in redirect to /workshop), but the page itself is prerendered.
+export default function LandingPage() {
 
   return (
     <>

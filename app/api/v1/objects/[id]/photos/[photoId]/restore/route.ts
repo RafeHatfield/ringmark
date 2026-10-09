@@ -1,6 +1,7 @@
 import { authenticateApiRequest } from '@/lib/api-auth'
 import { createServiceClient } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 
 const BUCKET = 'object-photos'
 const SIGNED_URL_EXPIRY_SECONDS = 3600
@@ -60,5 +61,6 @@ export async function POST(
     .from(BUCKET)
     .createSignedUrl(restored.storage_path, SIGNED_URL_EXPIRY_SECONDS)
 
+  revalidatePublicStories()
   return Response.json({ ...restored, signed_url: signedData?.signedUrl ?? null })
 }

@@ -50,7 +50,9 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  if (isAuthRoute && user) {
+  // The landing page is static; send a signed-in maker to the workshop here
+  // rather than reading the session inside the page.
+  if ((isAuthRoute || pathname === '/') && user) {
     const url = request.nextUrl.clone()
     url.pathname = '/workshop'
     const response = NextResponse.redirect(url)
@@ -71,6 +73,15 @@ export const config = {
     // anonymous clients, and running the Supabase session refresh on them only
     // adds latency and cookie churn to requests that will never carry a browser
     // session. For api/upload that cost lands on a multi-megabyte request body.
-    '/((?!_next/static|_next/image|favicon.ico|api/mcp|api/upload|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    //
+    // p/, maker, contact, robots.txt and sitemap.xml are the public surface:
+    // cached or static, identical for every viewer, and never the place a
+    // session is needed. Matching them would spend a middleware invocation per
+    // QR scan for nothing. Every exclusion is anchored at the first path
+    // segment — a bare suffix like "[^/]+/maker$" would let /objects/maker
+    // skip the login gate and 500. The landing page stays matched because its
+    // signed-in redirect lives here; /{handle}/maker stays matched because it
+    // is dynamic anyway and the term to exclude it safely isn't worth it.
+    '/((?!_next/static|_next/image|favicon.ico|api/mcp|api/upload|\\.well-known|p/|maker(?:/|$)|contact$|robots\\.txt$|sitemap\\.xml$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

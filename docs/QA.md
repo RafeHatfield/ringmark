@@ -80,9 +80,11 @@ Each block is independently testable. Open a second browser in incognito for ano
 
 ---
 
-## QR routing (critical — two experiences from one URL)
+## QR routing
 
-- [ ] While logged in, open `/p/[slug]` for an object you own → redirected immediately to `/objects/[id]` (admin view)
+- [ ] While logged in, open `/p/[slug]` for an object you own → the same public page a buyer sees (no banner, no redirect — the page is cached and identical for every viewer)
+- [ ] While logged in, open `/` → redirected to `/workshop`
+- [ ] Edit a caption or the story, then reload `/p/[slug]` → the change is visible immediately (the write purged the cache). **Run this against a production build** (`next build && next start`, or a preview deploy) — `next dev` never caches, so it cannot fail there.
 - [ ] In incognito, open the same `/p/[slug]` for a **published** object → public story page renders (no login prompt)
 - [ ] In incognito, open `/p/[slug]` for an **unpublished** object → shows "hasn't been published yet" message (not blank, not 404)
 - [ ] Private notes entered on the edit page do NOT appear anywhere on the public page text

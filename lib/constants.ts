@@ -61,4 +61,22 @@ export const DEFAULT_CARE_INSTRUCTIONS =
 
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://ringmark.org'
 export const SIGNED_URL_EXPIRY = 3600
+
+/**
+ * Lifetime of the signed photo URLs baked into the cached public story page.
+ *
+ * The page is ISR-cached and Next serves it stale-while-revalidating, so a
+ * page that sat unviewed for a month is served as-is to the next scanner
+ * before it regenerates. Any URL inside it must therefore outlive any
+ * plausible idle gap, or that buyer sees broken images — the normal case for
+ * a bowl scanned weeks after it sold. One year.
+ *
+ * What this does not weaken: private photos are never signed for the public
+ * page at all, and every write purges the page, so a photo that is hidden or
+ * deleted leaves the page immediately. The only residue is that someone who
+ * saved the old URL while the photo was public can still fetch it for the
+ * remainder of the year — which is no more than they could do by saving the
+ * image itself while it was public.
+ */
+export const PUBLIC_PHOTO_URL_EXPIRY = 60 * 60 * 24 * 365
 export const MAX_VISIBLE_PHOTOS = 3

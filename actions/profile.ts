@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 
@@ -40,4 +41,6 @@ export async function saveProfile(formData: FormData): Promise<{ error: string }
   revalidatePath('/workshop')
   revalidatePath('/maker')
   if (handle) revalidatePath(`/${handle}/maker`)
+  // The maker's name, avatar, bio and handle render on every story page and OG image.
+  revalidatePublicStories()
 }

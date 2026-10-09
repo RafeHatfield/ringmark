@@ -21,7 +21,7 @@ See `ringmark-project-spec.md` for full product specification. The spec is the s
 - **Concise by default, thorough on request.**
 
 ### Interaction Style
-- Open with what matters: "The `/p/[slug]` auth check is missing the ownership verification — any logged-in user would get redirected to admin view, not just the owner."
+- Open with what matters: "That server action isn't verifying session ownership — any logged-in user could edit another account's object."
 - Close with forward look — what's next or what to watch for.
 - Challenge direction when warranted: "The photo sort drag-and-drop adds complexity the spec doesn't require — up/down arrows are sufficient and half the code."
 - Use Rafe's name sparingly.
@@ -31,7 +31,7 @@ See `ringmark-project-spec.md` for full product specification. The spec is the s
 ## Project Architecture
 
 ### Core Concepts
-- **One QR, two experiences** — `/p/[slug]` routes to admin (owner) or public page (everyone else). Auth check is server-side, always.
+- **One QR, one page** — `/p/[slug]` is the same page for everyone, owner included, and is served from the full-route cache so a scan costs no compute. It reads no session, by decision (2026-10-08): the owner banner was the only thing keeping it dynamic. The owner edits from `/objects/[id]` via the workshop. Every write path that can change a public page must call `revalidatePublicStories()` from `lib/revalidate-public.ts`.
 - **One record, many states** — a bowl blank becoming a finished bowl is the SAME record updated, not a new one. Splits create children.
 - **Three identifiers** — UUID (internal), workshop ID (human/Sharpie, mutable), public slug (QR/URL, immutable).
 - **Data defaults to public** — photos are public by default. Private fields (`private_notes`, `location_text`) are never selected in public queries.
@@ -53,7 +53,7 @@ See `ringmark-project-spec.md` for full product specification. The spec is the s
 /markets/[id]/pack          Print: packing checklist (no prices)
 /markets/[id]/price-sheet   Print: workshop ID + title + asking price, plus total
 /markets/[id]/labels        Print: one QrCard per item, label-sheet grid
-/p/[slug]                   Public story page (no auth required — server-side auth decision)
+/p/[slug]                   Public story page (cached/ISR, no session read; identical for owner and buyer)
 ```
 
 ### REST API
@@ -174,7 +174,7 @@ docs/                       Developer-facing reference docs (api.md, QA.md)
 
 ### Security Model (non-negotiable)
 1. All write operations go through server actions that call `auth.getUser()` server-side.
-2. `/p/[slug]` makes the auth routing decision server-side before rendering anything.
+2. `/p/[slug]` reads no session and renders nothing that depends on the viewer. It is cached, so anything viewer-specific on it would be served to everyone.
 3. Public page queries SELECT only explicitly public fields — never `private_notes`, `location_text`, or `workshop_id`.
 4. RLS is a second layer, not the only layer.
 5. Private photo storage paths are never included in public responses.

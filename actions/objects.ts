@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { generateSlug } from '@/lib/slug-gen'
@@ -220,7 +221,8 @@ export async function updateObject(
 
   revalidatePath(`/objects/${id}`)
   revalidatePath('/workshop')
-  if (existing.public_slug) revalidatePath(`/p/${existing.public_slug}`)
+  // Blanket purge: descendants render this object's title, story and photos in their lineage.
+  revalidatePublicStories()
   return {}
 }
 
@@ -283,7 +285,8 @@ export async function deleteObject(id: string): Promise<{ error?: string }> {
   if (error) return { error: error.message }
 
   revalidatePath('/workshop')
-  if (existing.public_slug) revalidatePath(`/p/${existing.public_slug}`)
+  // Blanket purge: descendants render this object's title, story and photos in their lineage.
+  revalidatePublicStories()
   return {}
 }
 

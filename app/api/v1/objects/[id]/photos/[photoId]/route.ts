@@ -1,6 +1,7 @@
 import { authenticateApiRequest } from '@/lib/api-auth'
 import { createServiceClient } from '@/lib/supabase/service'
 import { resolveObject } from '@/lib/resolve-object'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 
 const BUCKET = 'object-photos'
 const SIGNED_URL_EXPIRY_SECONDS = 3600
@@ -63,6 +64,7 @@ export async function PATCH(
     .from(BUCKET)
     .createSignedUrl(updated.storage_path, SIGNED_URL_EXPIRY_SECONDS)
 
+  revalidatePublicStories()
   return Response.json({ ...updated, signed_url: signedData?.signedUrl ?? null })
 }
 
@@ -116,5 +118,6 @@ export async function DELETE(
     return Response.json({ error: deleteError.message }, { status: 500 })
   }
 
+  revalidatePublicStories()
   return new Response(null, { status: 204 })
 }

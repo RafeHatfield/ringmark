@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 
@@ -34,6 +35,7 @@ export async function saveStory(
 
   revalidatePath(`/objects/${objectId}`)
   revalidatePath(`/objects/${objectId}/story`)
+  revalidatePublicStories()
   return {}
 }
 
@@ -50,7 +52,7 @@ export async function publishObject(objectId: string): Promise<{ error?: string 
   if (error) return { error: error.message }
 
   revalidatePath(`/objects/${objectId}`)
-  revalidatePath(`/p/`, 'layout')
+  revalidatePublicStories()
   revalidatePath('/maker')
   return {}
 }
@@ -68,6 +70,6 @@ export async function unpublishObject(objectId: string): Promise<{ error?: strin
   if (error) return { error: error.message }
 
   revalidatePath(`/objects/${objectId}`)
-  revalidatePath(`/p/`, 'layout')
+  revalidatePublicStories()
   return {}
 }

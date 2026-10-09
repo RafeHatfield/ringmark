@@ -69,14 +69,15 @@ test.beforeAll(async ({ browser }) => {
 
 // ── Owner view ────────────────────────────────────────────────────────────────
 
-test('logged-in owner visiting /p/[slug] sees the public view with an edit link', async ({ browser }) => {
+test('logged-in owner visiting /p/[slug] sees exactly the public view (no banner, no redirect)', async ({ browser }) => {
   const ctx = await browser.newContext({ storageState: AUTH_STATE })
   const page = await ctx.newPage()
   await page.goto(`/p/${publishedSlug}`)
   // Stays on the public page — no redirect
   await expect(page).toHaveURL(`/p/${publishedSlug}`)
-  // Owner bar with edit link is visible
-  await expect(page.getByRole('link', { name: /Edit story/ })).toBeVisible()
+  // The page is cached and identical for every viewer: no owner bar, no edit link
+  await expect(page.getByRole('heading', { name: 'Public Page Test Object' })).toBeVisible()
+  await expect(page.getByRole('link', { name: /Edit story/ })).toHaveCount(0)
   await ctx.close()
 })
 
