@@ -28,8 +28,8 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://ringmark.org' },
 }
 
-// Static. The logged-in redirect to /workshop lives in middleware so this
-// page never needs a session read and is served straight from the CDN.
+// Static: no session read here. Middleware still runs on / (it owns the
+// signed-in redirect to /workshop), but the page itself is prerendered.
 export default function LandingPage() {
 
   return (

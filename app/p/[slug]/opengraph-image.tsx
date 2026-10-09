@@ -5,7 +5,7 @@ import { getWorkshopName } from '@/lib/utils'
 // Rendering an image is the most expensive thing this app does per request,
 // and crawlers fetch it on every share. Cache it like the page it belongs to;
 // revalidatePublicStories() purges it alongside the page on every write.
-export const revalidate = 3600
+export const revalidate = 86400
 export const dynamicParams = true
 export function generateStaticParams() {
   return []

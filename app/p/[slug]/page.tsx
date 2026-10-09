@@ -1,9 +1,10 @@
 import { cache } from 'react'
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { APP_URL, SIGNED_URL_EXPIRY, typeLabel } from '@/lib/constants'
+import { APP_URL, PUBLIC_PHOTO_URL_EXPIRY, typeLabel } from '@/lib/constants'
 import { getWorkshopName } from '@/lib/utils'
 import { PublicFooter } from '@/components/public-chrome'
 import { signPathsBatch } from '@/lib/signed-urls'
@@ -11,10 +12,12 @@ import { StagePhoto } from './stage-photo'
 
 // Served from the full-route cache: a QR scan must not invoke a function.
 // There is deliberately no session read here — the owner sees the same page
-// as a buyer. Writes purge this cache via revalidatePublicStories(); the timed
-// revalidate exists only so cached signed photo URLs are replaced before they
-// expire (SIGNED_URL_EXPIRY is 3600s).
-export const revalidate = 3000
+// as a buyer. Freshness comes from writes purging this cache via
+// revalidatePublicStories(); the daily timed revalidate is a backstop for a
+// purge that was missed, not the mechanism. Stale pages are served while
+// regenerating, which is why the photo URLs inside use
+// PUBLIC_PHOTO_URL_EXPIRY rather than the admin lifetime.
+export const revalidate = 86400
 export const dynamicParams = true
 export function generateStaticParams() {
   return []
@@ -79,9 +82,10 @@ export default async function PublicStoryPage({
 
   const object = await getPublishedObject(slug)
 
-  if (!object) {
-    return <NotFound message="This piece could not be found." />
-  }
+  // A real 404: a 200 "not found" would be cached per random slug and read by
+  // search engines as a soft 404. Unpublished objects are different — that
+  // placeholder is a real state, and publishing purges it.
+  if (!object) notFound()
 
   if (!object.is_published) {
     return <NotFound message="This piece's story hasn't been published yet." />
@@ -165,7 +169,7 @@ export default async function PublicStoryPage({
 
   // Batch-generate signed URLs for every photo across all steps
   const allPaths = [...photosByStep.values()].flatMap(ps => ps.map(p => p.path))
-  const signedByPath = await signPathsBatch(admin.storage, 'object-photos', allPaths, SIGNED_URL_EXPIRY)
+  const signedByPath = await signPathsBatch(admin.storage, 'object-photos', allPaths, PUBLIC_PHOTO_URL_EXPIRY)
 
   // Annotate each step with its display label and resolved photo array
   const steps = chain.map(step => {

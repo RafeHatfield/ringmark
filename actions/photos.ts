@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import { getSwapPair } from '@/lib/photo-utils'
@@ -52,7 +53,7 @@ export async function createPhotoRecord(
   if (error || !created) return { error: error?.message ?? 'Failed to save photo.' }
 
   revalidatePath(`/objects/${objectId}`)
-  if (object.public_slug) revalidatePath(`/p/${object.public_slug}`)
+  revalidatePublicStories()
   return { id: created.id }
 }
 
@@ -87,7 +88,7 @@ export async function deletePhoto(photoId: string): Promise<{ error?: string }> 
   if (error) return { error: error.message }
 
   revalidatePath(`/objects/${photo.object_id}`)
-  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
+  revalidatePublicStories()
   return {}
 }
 
@@ -115,7 +116,7 @@ export async function restorePhoto(photoId: string): Promise<{ error?: string }>
   if (error) return { error: error.message }
 
   revalidatePath(`/objects/${photo.object_id}`)
-  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
+  revalidatePublicStories()
   return {}
 }
 
@@ -144,7 +145,7 @@ export async function updatePhotoCaption(
   if (error) return { error: error.message }
 
   revalidatePath(`/objects/${photo.object_id}`)
-  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
+  revalidatePublicStories()
   return {}
 }
 
@@ -170,7 +171,7 @@ export async function togglePhotoVisibility(photoId: string): Promise<{ error?: 
   if (error) return { error: error.message }
 
   revalidatePath(`/objects/${photo.object_id}`)
-  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
+  revalidatePublicStories()
   return {}
 }
 
@@ -214,6 +215,6 @@ export async function movePhoto(
   ])
 
   revalidatePath(`/objects/${photo.object_id}`)
-  if (photo.wood_objects?.public_slug) revalidatePath(`/p/${photo.wood_objects.public_slug}`)
+  revalidatePublicStories()
   return {}
 }

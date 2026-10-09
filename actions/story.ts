@@ -35,6 +35,7 @@ export async function saveStory(
 
   revalidatePath(`/objects/${objectId}`)
   revalidatePath(`/objects/${objectId}/story`)
+  revalidatePublicStories()
   return {}
 }
 
