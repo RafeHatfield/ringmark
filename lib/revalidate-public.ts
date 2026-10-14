@@ -18,4 +18,5 @@ export function revalidatePublicStories() {
   revalidatePath('/p/[slug]', 'layout')
   revalidatePath('/maker', 'layout')
   revalidatePath('/[handle]/maker', 'layout')
+  revalidatePath('/sitemap.xml', 'layout')
 }

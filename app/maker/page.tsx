@@ -11,30 +11,32 @@ export const revalidate = 86400
 
 export async function generateMetadata(): Promise<Metadata> {
   const admin = createAdminClient()
-  const { data: account } = await admin
+  const { data: account, error } = await admin
     .from('accounts')
-    .select('display_name, workshop_name, name, bio, handle')
+    .select('display_name, workshop_name, name, bio')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
 
-  if (account?.handle) {
-    permanentRedirect(`/${account.handle}/maker`)
-  }
-
+  if (error) throw new Error(`maker lookup failed: ${error.message}`)
+  // The handle redirect lives in the page only; issuing it here as well
+  // produced a doubled Location header on the cached 308.
   return makerMetadata(account, `${APP_URL}/maker`)
 }
 
 export default async function MakerPage() {
   const admin = createAdminClient()
 
-  const { data: account } = await admin
+  const { data: account, error } = await admin
     .from('accounts')
     .select('id, display_name, workshop_name, name, bio, avatar_storage_path, website_url, handle')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
 
+  // Throw on a failed query: this route is cached, so the empty state below
+  // would otherwise be stored for a day. A throw keeps the old page.
+  if (error) throw new Error(`maker lookup failed: ${error.message}`)
   if (!account) {
     return (
       <div className="min-h-screen bg-paper flex items-center justify-center px-4">
@@ -49,13 +51,15 @@ export default async function MakerPage() {
 
   // Finished work only — a published log or blank has its own story page but isn't portfolio.
   // Public fields only, never private_notes / location_text / workshop_id.
-  const { data: pieces } = await admin
+  const { data: pieces, error: piecesError } = await admin
     .from('wood_objects')
     .select('public_slug, public_title, title, species, updated_at')
     .eq('account_id', account.id)
     .eq('is_published', true)
     .in('status', FINISHED_STATUSES)
     .order('updated_at', { ascending: false })
+
+  if (piecesError) throw new Error(`maker pieces lookup failed: ${piecesError.message}`)
 
   return <MakerProfile account={account} pieces={pieces} canonicalUrl={`${APP_URL}/maker`} />
 }

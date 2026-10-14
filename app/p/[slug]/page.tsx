@@ -28,11 +28,15 @@ export function generateStaticParams() {
 // it's invoked with the same slug.
 const getPublishedObject = cache(async (slug: string) => {
   const admin = createAdminClient()
-  const { data } = await admin
+  const { data, error } = await admin
     .from('wood_objects')
     .select('id, public_slug, account_id, is_published, object_type, title, species, public_title, public_story, public_notes, public_care, parent_id, root_id')
     .eq('public_slug', slug)
     .maybeSingle()
+  // A failed query must throw, not read as "no such object": this route is
+  // cached, and a notFound() here would be stored as a 404 for a day. A throw
+  // fails this regeneration and the previously cached page keeps serving.
+  if (error) throw new Error(`story lookup failed: ${error.message}`)
   return data
 })
 
@@ -50,11 +54,12 @@ export async function generateMetadata({
   }
 
   const admin = createAdminClient()
-  const { data: account } = await admin
+  const { data: account, error: accountError } = await admin
     .from('accounts')
     .select('workshop_name, display_name, name')
     .eq('id', object.account_id)
     .maybeSingle()
+  if (accountError) throw new Error(`account lookup failed: ${accountError.message}`)
 
   const title = object.public_title || object.title || slug
   const workshopName = getWorkshopName(account)
@@ -92,11 +97,14 @@ export default async function PublicStoryPage({
   }
 
   const admin = createAdminClient()
-  const { data: accountData } = await admin
+  // Every query below throws on error for the same reason as the lookup
+  // above: a partial page must never be cached as the finished article.
+  const { data: accountData, error: accountError } = await admin
     .from('accounts')
     .select('name, display_name, workshop_name, bio, avatar_storage_path, website_url, handle')
     .eq('id', object.account_id)
     .maybeSingle()
+  if (accountError) throw new Error(`account lookup failed: ${accountError.message}`)
 
   // Build lineage chain root → leaf: one query fetches the whole tree by
   // root_id, then an in-memory walk from the leaf back to the root via
@@ -114,11 +122,12 @@ export default async function PublicStoryPage({
   const chain: ChainStep[] = []
 
   if (object.root_id) {
-    const { data: treeRows } = await admin
+    const { data: treeRows, error: treeError } = await admin
       .from('wood_objects')
       .select('id, parent_id, object_type, title, public_story, public_notes, public_care, species')
       .eq('root_id', object.root_id)
       .eq('account_id', object.account_id)
+    if (treeError) throw new Error(`lineage lookup failed: ${treeError.message}`)
 
     const rowsById = new Map<string, ChainStep>((treeRows ?? []).map(row => [row.id, row as ChainStep]))
 
@@ -147,7 +156,7 @@ export default async function PublicStoryPage({
 
   // Fetch ALL public photos for every step in one query so each stage can
   // show its full photo set in the lightbox (not just a single thumbnail).
-  const { data: allPhotos } = await admin
+  const { data: allPhotos, error: photosError } = await admin
     .from('object_photos')
     .select('object_id, storage_path, caption, sort_order')
     .in('object_id', chain.map(s => s.id))
@@ -155,6 +164,7 @@ export default async function PublicStoryPage({
     .is('deleted_at', null)
     .eq('status', 'live')
     .order('sort_order', { ascending: true })
+  if (photosError) throw new Error(`photo lookup failed: ${photosError.message}`)
 
   // Group photos by step
   const photosByStep = new Map<string, Array<{ path: string; caption: string | null }>>()

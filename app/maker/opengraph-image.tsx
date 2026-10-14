@@ -2,6 +2,9 @@ import { ImageResponse } from 'next/og'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getWorkshopName } from '@/lib/utils'
 
+// Cached like the page; purged by revalidatePublicStories(), daily as a backstop.
+export const revalidate = 86400
+
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 export const alt = 'Ringmark maker profile'
@@ -9,12 +12,14 @@ export const alt = 'Ringmark maker profile'
 export default async function OgImage() {
   const admin = createAdminClient()
 
-  const { data: account } = await admin
+  const { data: account, error } = await admin
     .from('accounts')
     .select('display_name, workshop_name, name, bio, avatar_storage_path, website_url')
     .order('created_at', { ascending: true })
     .limit(1)
-    .single()
+    .maybeSingle()
+
+  if (error) throw new Error(`maker lookup failed: ${error.message}`)
 
   const makerName = getWorkshopName(account)
   const bio = account?.bio ?? null

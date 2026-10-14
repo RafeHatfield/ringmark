@@ -1,6 +1,7 @@
 import { authenticateApiRequest } from '@/lib/api-auth'
 import { createServiceClient, type ServiceClient } from '@/lib/supabase/service'
 import { signPathsBatch } from '@/lib/signed-urls'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 import type { MarketEventItem } from '@/lib/types'
 
 const BUCKET = 'object-photos'
@@ -80,6 +81,8 @@ export async function POST(
     )
   }
 
+  // The status cascade above changes what the cached maker pages list.
+  revalidatePublicStories()
   const [enriched] = await enrichItems(db, account.id, [updatedItem])
   return Response.json(enriched)
 }

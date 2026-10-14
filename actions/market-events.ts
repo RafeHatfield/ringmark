@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidatePublicStories } from '@/lib/revalidate-public'
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateAccount } from '@/lib/supabase/account'
 import type { MarketEventStatus, MarketEventUpdate } from '@/lib/types'
@@ -351,6 +352,8 @@ export async function markItemSold(
 
   revalidatePath(`/markets/${item.market_event_id}`)
   revalidatePath(`/objects/${item.object_id}`)
+  // Status is what the maker pages filter on; 'sold' is a finished status.
+  revalidatePublicStories()
   return {}
 }
 
@@ -394,5 +397,6 @@ export async function unmarkItemSold(itemId: string): Promise<{ error?: string }
 
   revalidatePath(`/markets/${item.market_event_id}`)
   revalidatePath(`/objects/${item.object_id}`)
+  revalidatePublicStories()
   return {}
 }
