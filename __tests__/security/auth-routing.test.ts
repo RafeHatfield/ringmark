@@ -35,7 +35,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const read = (p: string) => readFileSync(resolve(p), 'utf8')
@@ -46,6 +46,9 @@ const landingSrc = read('./app/page.tsx')
 const middlewareSrc = read('./middleware.ts')
 const constantsSrc = read('./lib/constants.ts')
 const helperSrc = read('./lib/revalidate-public.ts')
+const makerSrc = read('./app/maker/page.tsx')
+const handleMakerSrc = read('./app/[handle]/maker/page.tsx')
+const makerOgSrc = read('./app/maker/opengraph-image.tsx')
 
 const pageBodySrc = src.slice(src.indexOf('export default async function PublicStoryPage'))
 
@@ -80,27 +83,51 @@ const CACHED_ROUTE_IMPORT_ALLOWLIST = new Set([
   '@/lib/utils',
   '@/lib/signed-urls',
   '@/components/public-chrome',
+  '@/components/maker-profile',
   './stage-photo',
 ])
 
+// Every route served from the full-route cache. The maker pages joined the
+// story page here once /maker turned out to be frozen at build time.
+const CACHED_ROUTES = [
+  ['p/[slug]/page', src],
+  ['p/[slug]/opengraph-image', ogSrc],
+  ['maker/page', makerSrc],
+  ['maker/opengraph-image', makerOgSrc],
+  ['[handle]/maker/page', handleMakerSrc],
+] as const
+
 describe('auth routing — /p/[slug]', () => {
   it('imports only viewer-independent modules (no session, cookies or headers)', () => {
-    for (const file of [src, ogSrc]) {
+    const makerProfileSrc = read('./components/maker-profile.tsx')
+    for (const [name, file] of [...CACHED_ROUTES, ['components/maker-profile', makerProfileSrc]] as const) {
       for (const spec of imports(file)) {
-        assert.ok(CACHED_ROUTE_IMPORT_ALLOWLIST.has(spec), `cached route imports "${spec}", which is not on the allow-list — if it is viewer-independent, add it there deliberately`)
+        assert.ok(CACHED_ROUTE_IMPORT_ALLOWLIST.has(spec), `${name} imports "${spec}", which is not on the allow-list — if it is viewer-independent, add it there deliberately`)
       }
-    }
-    for (const marker of ['auth.getUser(', 'cookies(', 'headers(', 'isOwner']) {
-      assert.ok(!src.includes(marker) && !ogSrc.includes(marker), `cached route must not contain "${marker}"`)
+      for (const marker of ['auth.getUser(', 'cookies(', 'headers(', 'isOwner']) {
+        assert.ok(!file.includes(marker), `${name} must not contain "${marker}"`)
+      }
     }
   })
 
   it('opts into the full-route cache and never opts back out', () => {
-    for (const [name, file] of [['page', src], ['opengraph-image', ogSrc]] as const) {
-      assert.ok(/^export const revalidate = \d+$/m.test(file), `${name} must export a numeric revalidate`)
-      assert.ok(file.includes('export function generateStaticParams'), `${name} must export generateStaticParams so dynamic slugs are cached on demand`)
+    for (const [name, file] of CACHED_ROUTES) {
       assert.ok(!/export const dynamic\b/.test(file), `${name} must not export a dynamic segment config — force-dynamic would silently undo the cache`)
     }
+    // Dynamic segments need both a revalidate and generateStaticParams to be cached on demand.
+    for (const [name, file] of [['p/[slug]/page', src], ['p/[slug]/opengraph-image', ogSrc], ['[handle]/maker/page', handleMakerSrc]] as const) {
+      assert.ok(/^export const revalidate = \d+$/m.test(file), `${name} must export a numeric revalidate`)
+      assert.ok(file.includes('export function generateStaticParams'), `${name} must export generateStaticParams so dynamic params are cached on demand`)
+    }
+    // A static route with no revalidate is prerendered once at build and never updates.
+    assert.ok(/^export const revalidate = \d+$/m.test(makerSrc), '/maker must export a numeric revalidate, or a newly finished piece waits for the next deploy')
+  })
+
+  it('no loading.tsx on the story route: a streamed shell turns notFound() into a 200', () => {
+    // With a Suspense boundary from loading.tsx, the shell is sent before the
+    // page body runs, so notFound() can only swap the UI — the status is already
+    // 200 and the 404 is cached as a success. Observed on production.
+    assert.ok(!existsSync(resolve('./app/p/[slug]/loading.tsx')), 'app/p/[slug]/loading.tsx must not exist')
   })
 
   it('photo URLs baked into the cached page use the long public lifetime', () => {
@@ -151,9 +178,12 @@ describe('cache contract — public pages', () => {
     assert.ok(/^\s*if \(.*pathname === '\/'.*&& user\)/m.test(middlewareSrc), 'middleware must redirect a signed-in user away from / in code')
   })
 
-  it('revalidatePublicStories purges the whole /p segment in the form Next honours', () => {
-    // Without the 'layout' type, revalidatePath on a dynamic segment is a no-op.
-    assert.ok(helperSrc.includes("revalidatePath('/p/[slug]', 'layout')"), "helper must call revalidatePath('/p/[slug]', 'layout')")
+  it('revalidatePublicStories purges every cached public segment in the form Next honours', () => {
+    // Without the 'layout' type, revalidatePath on a dynamic segment is a no-op
+    // and a page-type purge leaves the nested opengraph-image stale.
+    for (const path of ['/p/[slug]', '/maker', '/[handle]/maker']) {
+      assert.ok(helperSrc.includes(`revalidatePath('${path}', 'layout')`), `helper must call revalidatePath('${path}', 'layout')`)
+    }
   })
 
   it('middleware matcher: compiled and run against real paths', () => {

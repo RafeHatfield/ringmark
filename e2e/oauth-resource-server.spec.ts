@@ -20,7 +20,7 @@
 import { test, expect } from '@playwright/test'
 import { TEST_EMAIL, TEST_PASSWORD } from './helpers/supabase-admin'
 
-const BASE = 'http://localhost:3000'
+const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
 const PRM_PATH = '/.well-known/oauth-protected-resource'
 
 // ── Discovery chain ───────────────────────────────────────────────────────────

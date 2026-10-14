@@ -6,6 +6,17 @@ import { MakerProfile, makerMetadata } from '@/components/maker-profile'
 
 type Props = { params: Promise<{ handle: string }> }
 
+// Cached per handle, same contract as /p/[slug]: no session read, rendered
+// once and served from the full-route cache. generateStaticParams returning
+// nothing is what lets Next cache a dynamic segment on demand; without it the
+// route stays dynamic and every visit is a function invocation. Writes purge
+// it via revalidatePublicStories(); the daily timer is a backstop.
+export const revalidate = 86400
+export const dynamicParams = true
+export function generateStaticParams() {
+  return []
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { handle } = await params
   const admin = createAdminClient()

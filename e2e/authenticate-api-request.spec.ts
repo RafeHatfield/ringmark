@@ -27,7 +27,7 @@ function adminClient() {
   )
 }
 
-const BASE = 'http://localhost:3000'
+const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
 
 // Raw test key — inserted directly and cleaned up in afterAll
 const TEST_RAW_KEY = `rmk_testauthrequest${Date.now().toString(16)}`

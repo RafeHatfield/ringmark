@@ -4,6 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { APP_URL, FINISHED_STATUSES } from '@/lib/constants'
 import { MakerProfile, makerMetadata } from '@/components/maker-profile'
 
+// Cached: this page reads no session. Without a revalidate it would be frozen
+// at build time and a newly finished piece would wait for the next deploy.
+// Writes purge it via revalidatePublicStories(); the daily timer is a backstop.
+export const revalidate = 86400
+
 export async function generateMetadata(): Promise<Metadata> {
   const admin = createAdminClient()
   const { data: account } = await admin

@@ -31,7 +31,7 @@ See `ringmark-project-spec.md` for full product specification. The spec is the s
 ## Project Architecture
 
 ### Core Concepts
-- **One QR, one page** — `/p/[slug]` is the same page for everyone, owner included, and is served from the full-route cache so a scan costs no compute. It reads no session, by decision (2026-10-08): the owner banner was the only thing keeping it dynamic. The owner edits from `/objects/[id]` via the workshop. Every write path that can change a public page must call `revalidatePublicStories()` from `lib/revalidate-public.ts`.
+- **One QR, one page** — `/p/[slug]` is the same page for everyone, owner included, and is served from the full-route cache so a scan costs no compute. It reads no session, by decision (2026-10-08): the owner banner was the only thing keeping it dynamic. The owner edits from `/objects/[id]` via the workshop. `/maker` and `/[handle]/maker` are cached the same way. Every write path that can change a public page must call `revalidatePublicStories()` from `lib/revalidate-public.ts`, which purges all three segments. No `loading.tsx` under `/p/[slug]`: a streamed shell turns `notFound()` into a cached 200.
 - **One record, many states** — a bowl blank becoming a finished bowl is the SAME record updated, not a new one. Splits create children.
 - **Three identifiers** — UUID (internal), workshop ID (human/Sharpie, mutable), public slug (QR/URL, immutable).
 - **Data defaults to public** — photos are public by default. Private fields (`private_notes`, `location_text`) are never selected in public queries.
