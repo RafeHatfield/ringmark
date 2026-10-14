@@ -36,7 +36,7 @@ import {
 
 const AUTH_STATE       = path.join(__dirname, '.auth/user.json')
 const OTHER_AUTH_STATE = path.join(__dirname, '.auth/other-user.json')
-const BASE             = 'http://localhost:3000'
+const BASE             = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
 
 // Minimal 1×1 PNG for photo upload tests
 const MINIMAL_PNG = Buffer.from(

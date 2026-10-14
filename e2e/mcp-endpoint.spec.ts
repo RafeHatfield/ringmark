@@ -22,7 +22,7 @@
 
 import { test, expect, type APIResponse, type APIRequestContext } from '@playwright/test'
 
-const MCP_URL = 'http://localhost:3000/api/mcp'
+const MCP_URL = `${process.env.E2E_BASE_URL ?? 'http://localhost:3000'}/api/mcp`
 const VALID_KEY = process.env.RINGMARK_API_KEY ?? ''
 
 function mcpHeaders(key: string) {

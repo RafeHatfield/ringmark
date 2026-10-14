@@ -37,6 +37,7 @@ export default function StoryEditor({
   const [care, setCare] = useState(publicCare ?? DEFAULT_CARE_INSTRUCTIONS)
   const [saveError, setSaveError] = useState('')
   const [saved, setSaved] = useState(false)
+  const [confirmingUnpublish, setConfirmingUnpublish] = useState(false)
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -67,9 +68,9 @@ export default function StoryEditor({
   }
 
   function handleUnpublish() {
-    if (!confirm('Unpublish? The public page will no longer be visible.')) return
     startTransition(async () => {
       const result = await unpublishObject(objectId)
+      setConfirmingUnpublish(false)
       if (result.error) setSaveError(result.error)
       else router.refresh()
     })
@@ -99,10 +100,30 @@ export default function StoryEditor({
             </p>
           )}
         </div>
-        {isPublished ? (
+        {isPublished && confirmingUnpublish ? (
+          // Two-tap confirm, same pattern as DeleteObjectButton: no browser dialog.
+          <div className="shrink-0 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleUnpublish}
+              disabled={isPending}
+              className="px-3 py-1.5 bg-destructive text-destructive-foreground rounded-md text-sm font-medium disabled:opacity-50 transition-opacity"
+            >
+              {isPending ? 'Unpublishing…' : 'Yes, unpublish'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingUnpublish(false)}
+              disabled={isPending}
+              className="text-sm text-bark hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : isPublished ? (
           <button
             type="button"
-            onClick={handleUnpublish}
+            onClick={() => setConfirmingUnpublish(true)}
             disabled={isPending}
             className="shrink-0 px-3 py-1.5 border border-hairline rounded-md text-sm hover:bg-sand transition-colors disabled:opacity-50"
           >

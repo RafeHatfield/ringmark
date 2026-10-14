@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og'
+import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getWorkshopName } from '@/lib/utils'
 
@@ -19,28 +20,32 @@ export default async function OgImage({ params }: { params: Promise<{ slug: stri
   const { slug } = await params
   const admin = createAdminClient()
 
-  const { data: object } = await admin
+  const { data: object, error } = await admin
     .from('wood_objects')
     .select('id, public_title, title, species, account_id')
     .eq('public_slug', slug)
     .eq('is_published', true)
-    .single()
+    .maybeSingle()
 
-  const title = object?.public_title || object?.title || slug
+  // Same contract as the page: a failed query throws (keeps the cached image),
+  // an unknown or unpublished slug is a real 404 rather than a generic card.
+  if (error) throw new Error(`story lookup failed: ${error.message}`)
+  if (!object) notFound()
 
-  const { data: account } = object?.account_id
-    ? await admin
-        .from('accounts')
-        .select('workshop_name, display_name, name')
-        .eq('id', object.account_id)
-        .single()
-    : { data: null }
+  const title = object.public_title || object.title || slug
+
+  const { data: account, error: accountError } = await admin
+    .from('accounts')
+    .select('workshop_name, display_name, name')
+    .eq('id', object.account_id)
+    .maybeSingle()
+  if (accountError) throw new Error(`account lookup failed: ${accountError.message}`)
 
   const workshopName = getWorkshopName(account)
 
   let heroUrl: string | null = null
-  if (object?.id) {
-    const { data: photos } = await admin
+  {
+    const { data: photos, error: photosError } = await admin
       .from('object_photos')
       .select('storage_path')
       .eq('object_id', object.id)
@@ -49,11 +54,13 @@ export default async function OgImage({ params }: { params: Promise<{ slug: stri
       .eq('status', 'live')
       .order('sort_order', { ascending: true })
       .limit(1)
+    if (photosError) throw new Error(`photo lookup failed: ${photosError.message}`)
 
     if (photos?.[0]?.storage_path) {
-      const { data: signed } = await admin.storage
+      const { data: signed, error: signError } = await admin.storage
         .from('object-photos')
         .createSignedUrls([photos[0].storage_path], 60)
+      if (signError) throw new Error(`photo signing failed: ${signError.message}`)
       heroUrl = signed?.[0]?.signedUrl ?? null
     }
   }
@@ -118,7 +125,7 @@ export default async function OgImage({ params }: { params: Promise<{ slug: stri
             >
               {title}
             </div>
-            {object?.species && (
+            {object.species && (
               <div style={{ fontSize: 20, color: '#B0612F', letterSpacing: '0.02em' }}>
                 {object.species}
               </div>

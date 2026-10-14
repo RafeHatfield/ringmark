@@ -35,7 +35,7 @@
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const read = (p: string) => readFileSync(resolve(p), 'utf8')
@@ -46,6 +46,10 @@ const landingSrc = read('./app/page.tsx')
 const middlewareSrc = read('./middleware.ts')
 const constantsSrc = read('./lib/constants.ts')
 const helperSrc = read('./lib/revalidate-public.ts')
+const makerSrc = read('./app/maker/page.tsx')
+const handleMakerSrc = read('./app/[handle]/maker/page.tsx')
+const makerOgSrc = read('./app/maker/opengraph-image.tsx')
+const sitemapSrc = read('./app/sitemap.ts')
 
 const pageBodySrc = src.slice(src.indexOf('export default async function PublicStoryPage'))
 
@@ -80,26 +84,81 @@ const CACHED_ROUTE_IMPORT_ALLOWLIST = new Set([
   '@/lib/utils',
   '@/lib/signed-urls',
   '@/components/public-chrome',
+  '@/components/maker-profile',
   './stage-photo',
 ])
 
+// Every route served from the full-route cache. The maker pages joined the
+// story page here once /maker turned out to be frozen at build time.
+const CACHED_ROUTES = [
+  ['p/[slug]/page', src],
+  ['p/[slug]/opengraph-image', ogSrc],
+  ['maker/page', makerSrc],
+  ['maker/opengraph-image', makerOgSrc],
+  ['[handle]/maker/page', handleMakerSrc],
+  ['sitemap.xml', sitemapSrc],
+] as const
+
+// Routes with a dynamic segment: cached on demand, so they also need the
+// generateStaticParams + dynamicParams pair.
+const CACHED_DYNAMIC_ROUTES = [
+  ['p/[slug]/page', src],
+  ['p/[slug]/opengraph-image', ogSrc],
+  ['[handle]/maker/page', handleMakerSrc],
+] as const
+
 describe('auth routing — /p/[slug]', () => {
   it('imports only viewer-independent modules (no session, cookies or headers)', () => {
-    for (const file of [src, ogSrc]) {
+    const makerProfileSrc = read('./components/maker-profile.tsx')
+    for (const [name, file] of [...CACHED_ROUTES, ['components/maker-profile', makerProfileSrc]] as const) {
       for (const spec of imports(file)) {
-        assert.ok(CACHED_ROUTE_IMPORT_ALLOWLIST.has(spec), `cached route imports "${spec}", which is not on the allow-list — if it is viewer-independent, add it there deliberately`)
+        assert.ok(CACHED_ROUTE_IMPORT_ALLOWLIST.has(spec), `${name} imports "${spec}", which is not on the allow-list — if it is viewer-independent, add it there deliberately`)
       }
-    }
-    for (const marker of ['auth.getUser(', 'cookies(', 'headers(', 'isOwner']) {
-      assert.ok(!src.includes(marker) && !ogSrc.includes(marker), `cached route must not contain "${marker}"`)
+      for (const marker of ['auth.getUser(', 'cookies(', 'headers(', 'isOwner']) {
+        assert.ok(!file.includes(marker), `${name} must not contain "${marker}"`)
+      }
     }
   })
 
   it('opts into the full-route cache and never opts back out', () => {
-    for (const [name, file] of [['page', src], ['opengraph-image', ogSrc]] as const) {
-      assert.ok(/^export const revalidate = \d+$/m.test(file), `${name} must export a numeric revalidate`)
-      assert.ok(file.includes('export function generateStaticParams'), `${name} must export generateStaticParams so dynamic slugs are cached on demand`)
+    for (const [name, file] of CACHED_ROUTES) {
       assert.ok(!/export const dynamic\b/.test(file), `${name} must not export a dynamic segment config — force-dynamic would silently undo the cache`)
+      // A static route with no revalidate is prerendered once at build and
+      // never updates; revalidate = 0 switches the cache off entirely.
+      assert.ok(/^export const revalidate = [1-9]\d*$/m.test(file), `${name} must export a positive numeric revalidate`)
+    }
+    for (const [name, file] of CACHED_DYNAMIC_ROUTES) {
+      assert.ok(file.includes('export function generateStaticParams'), `${name} must export generateStaticParams so dynamic params are cached on demand`)
+      // With an empty generateStaticParams, dynamicParams = false makes every param a 404.
+      assert.ok(!/dynamicParams\s*=\s*false/.test(file), `${name} must not set dynamicParams = false`)
+    }
+  })
+
+  it('a failed query throws rather than reading as "not found" (a 404 would be cached for a day)', () => {
+    for (const [name, file] of [...CACHED_ROUTES, ['components/maker-profile', read('./components/maker-profile.tsx')]] as const) {
+      // Every Supabase query result must be destructured with its error, and
+      // the file must throw on it. Source-level, so it is a regression guard,
+      // not a proof — the reviewer confirmed the cached-404 by cutting the DB.
+      const queries = file.match(/const \{ data[^}]*\} = await admin/g) ?? []
+      for (const q of queries) {
+        assert.ok(/error/.test(q), `${name}: "${q}" ignores the query error`)
+      }
+      if (queries.length > 0) assert.ok(/if \((\w+)\) throw new Error\(/.test(file), `${name} must throw on a query error`)
+    }
+  })
+
+  it('no loading.tsx at or above any cached route: a streamed shell turns notFound() into a 200', () => {
+    // With a Suspense boundary from loading.tsx, the shell is sent before the
+    // page body runs, so notFound() can only swap the UI — the status is already
+    // 200 and the 404 is cached as a success. Observed on production. A
+    // loading.tsx in a parent folder has the same effect, so walk up to app/.
+    const routeDirs = ['app/p/[slug]', 'app/[handle]/maker', 'app/maker']
+    for (const dir of routeDirs) {
+      const segments = dir.split('/')
+      for (let depth = segments.length; depth >= 1; depth--) {
+        const candidate = resolve(...segments.slice(0, depth), 'loading.tsx')
+        assert.ok(!existsSync(candidate), `${candidate} must not exist — it sits above the cached route ${dir}`)
+      }
     }
   })
 
@@ -151,9 +210,14 @@ describe('cache contract — public pages', () => {
     assert.ok(/^\s*if \(.*pathname === '\/'.*&& user\)/m.test(middlewareSrc), 'middleware must redirect a signed-in user away from / in code')
   })
 
-  it('revalidatePublicStories purges the whole /p segment in the form Next honours', () => {
-    // Without the 'layout' type, revalidatePath on a dynamic segment is a no-op.
-    assert.ok(helperSrc.includes("revalidatePath('/p/[slug]', 'layout')"), "helper must call revalidatePath('/p/[slug]', 'layout')")
+  it('revalidatePublicStories purges every cached public segment in the form Next honours', () => {
+    // Without the 'layout' type, revalidatePath on a dynamic segment is a no-op
+    // and a page-type purge leaves the nested opengraph-image stale.
+    // Comments are stripped first so a commented-out call cannot pass.
+    const helperCode = helperSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    for (const path of ['/p/[slug]', '/maker', '/[handle]/maker', '/sitemap.xml']) {
+      assert.ok(helperCode.includes(`revalidatePath('${path}', 'layout')`), `helper must call revalidatePath('${path}', 'layout')`)
+    }
   })
 
   it('middleware matcher: compiled and run against real paths', () => {
@@ -179,20 +243,37 @@ describe('cache contract — public pages', () => {
   })
 
   it('every write function that can change a public page purges the cache', () => {
-    // name → functions that must purge. Anything exported but not listed is
-    // asserted below to be one we have decided does not affect a public page.
+    // Every server-action module and every API route that exports a write
+    // handler is enumerated here, and each must be classified: required to
+    // purge (per function), exempt (per function, with a reason), or a file
+    // with no public effect at all (with a reason). An unclassified file fails
+    // the test — the market-event sold/unsold cascade went unpurged once
+    // because this list was maintained by hand.
+    const WRITE_HANDLERS = ['POST', 'PATCH', 'PUT', 'DELETE']
+    const discovered = [
+      ...readdirSync('./actions').filter((f) => f.endsWith('.ts')).map((f) => `./actions/${f}`),
+      ...(readdirSync('./app/api', { recursive: true }) as string[])
+        .filter((f) => f.endsWith('route.ts'))
+        .map((f) => `./app/api/${f}`)
+        .filter((f) => [...exportedFunctions(read(f)).keys()].some((n) => WRITE_HANDLERS.includes(n))),
+    ].sort()
+
     const required: Record<string, string[]> = {
       './actions/objects.ts': ['updateObject', 'deleteObject'],
       './actions/photos.ts': ['createPhotoRecord', 'deletePhoto', 'restorePhoto', 'updatePhotoCaption', 'togglePhotoVisibility', 'movePhoto'],
       './actions/story.ts': ['saveStory', 'publishObject', 'unpublishObject'],
       './actions/profile.ts': ['saveProfile'],
+      // Sold / unsold cascade wood_objects.status, which the maker pages filter on.
+      './actions/market-events.ts': ['markItemSold', 'unmarkItemSold'],
       './app/api/v1/objects/[id]/route.ts': ['PATCH', 'DELETE'],
       './app/api/v1/objects/[id]/photos/route.ts': ['POST'],
       './app/api/v1/objects/[id]/photos/[photoId]/route.ts': ['PATCH', 'DELETE'],
       './app/api/v1/objects/[id]/photos/[photoId]/restore/route.ts': ['POST'],
+      './app/api/v1/market-events/[id]/items/[itemId]/mark-sold/route.ts': ['POST'],
+      './app/api/v1/market-events/[id]/items/[itemId]/unmark-sold/route.ts': ['POST'],
       './app/api/upload/route.ts': ['PUT'],
     }
-    // Exported writes that do not change an existing public page, with the reason.
+    // Exported functions in a required file that do not change an existing public page.
     const exempt: Record<string, Record<string, string>> = {
       './actions/objects.ts': {
         createObject: 'new objects start unpublished and have no page yet',
@@ -200,10 +281,48 @@ describe('cache contract — public pages', () => {
         checkWorkshopId: 'read only',
         searchObjects: 'read only',
       },
+      './actions/market-events.ts': {
+        createMarketEvent: 'market data is private and never rendered publicly',
+        updateMarketEvent: 'market data is private and never rendered publicly',
+        deleteMarketEvent: 'market data is private and never rendered publicly',
+        addMarketItem: 'market data is private; does not touch wood_objects',
+        addMarketItemsBulk: 'market data is private; does not touch wood_objects',
+        updateMarketItemPrice: 'market data is private; does not touch wood_objects',
+        removeMarketItem: 'market data is private; does not touch wood_objects',
+      },
       './app/api/v1/objects/[id]/route.ts': { GET: 'read only' },
       './app/api/v1/objects/[id]/photos/route.ts': { GET: 'read only' },
     }
+    // Whole files whose writes cannot reach a public page.
+    const noPublicEffect: Record<string, string> = {
+      './actions/api-keys.ts': 'API keys are admin-only',
+      './actions/auth.ts': 'sign in / sign out',
+      './actions/contact.ts': 'contact form submissions',
+      './actions/members.ts': 'account membership is admin-only',
+      './actions/oauth.ts': 'OAuth consent',
+      './app/api/mcp/route.ts': 'proxies the REST routes, which purge',
+      './app/api/v1/objects/route.ts': 'creates objects, which start unpublished',
+      './app/api/v1/objects/[id]/children/route.ts': 'creates objects, which start unpublished',
+      './app/api/v1/objects/[id]/photos/upload-url/route.ts': 'reserves a pending row; PUT /api/upload finalises it and purges',
+      './app/api/v1/market-events/route.ts': 'market data is private and never rendered publicly',
+      './app/api/v1/market-events/[id]/route.ts': 'market data is private and never rendered publicly',
+      './app/api/v1/market-events/[id]/items/route.ts': 'market data is private; does not touch wood_objects',
+      './app/api/v1/market-events/[id]/items/bulk/route.ts': 'market data is private; does not touch wood_objects',
+      './app/api/v1/market-events/[id]/items/[itemId]/route.ts': 'market data is private; does not touch wood_objects',
+    }
+
+    for (const file of discovered) {
+      assert.ok(required[file] || noPublicEffect[file], `${file} exports a write and is neither required to purge nor listed as having no public effect (with a reason)`)
+      // A file claiming no public effect must not write wood_objects or object_photos.
+      if (noPublicEffect[file] && !required[file]) {
+        const body = read(file)
+        const touchesPublicTable = /\.from\('(wood_objects|object_photos|accounts)'\)[\s\S]{0,200}?\.(update|delete|upsert)\(/.test(body)
+        const onlyInserts = /\.from\('(wood_objects|object_photos)'\)[\s\S]{0,200}?\.insert\(/.test(body)
+        assert.ok(!touchesPublicTable || onlyInserts, `${file} is listed as having no public effect but updates or deletes a publicly rendered table`)
+      }
+    }
     for (const [file, names] of Object.entries(required)) {
+      assert.ok(discovered.includes(file), `${file} is required to purge but was not discovered — moved or renamed?`)
       const fns = exportedFunctions(read(file))
       for (const name of names) {
         const body = fns.get(name)

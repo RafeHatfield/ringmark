@@ -6,16 +6,28 @@ import { MakerProfile, makerMetadata } from '@/components/maker-profile'
 
 type Props = { params: Promise<{ handle: string }> }
 
+// Cached per handle, same contract as /p/[slug]: no session read, rendered
+// once and served from the full-route cache. generateStaticParams returning
+// nothing is what lets Next cache a dynamic segment on demand; without it the
+// route stays dynamic and every visit is a function invocation. Writes purge
+// it via revalidatePublicStories(); the daily timer is a backstop.
+export const revalidate = 86400
+export const dynamicParams = true
+export function generateStaticParams() {
+  return []
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { handle } = await params
   const admin = createAdminClient()
 
-  const { data: account } = await admin
+  const { data: account, error } = await admin
     .from('accounts')
     .select('display_name, workshop_name, name, bio')
     .eq('handle', handle)
     .maybeSingle()
 
+  if (error) throw new Error(`maker lookup failed: ${error.message}`)
   if (!account) return {}
 
   return makerMetadata(account, `${APP_URL}/${handle}/maker`)
@@ -25,23 +37,28 @@ export default async function HandleMakerPage({ params }: Props) {
   const { handle } = await params
   const admin = createAdminClient()
 
-  const { data: account } = await admin
+  const { data: account, error } = await admin
     .from('accounts')
     .select('id, display_name, workshop_name, name, bio, avatar_storage_path, website_url')
     .eq('handle', handle)
     .maybeSingle()
 
+  // Throw on a failed query: this route is cached, so a notFound() on a DB
+  // error would be stored as a 404 for a day. A throw keeps the old page.
+  if (error) throw new Error(`maker lookup failed: ${error.message}`)
   if (!account) notFound()
 
   // Finished work only — a published log or blank has its own story page but isn't portfolio.
   // Public fields only, never private_notes / location_text / workshop_id.
-  const { data: pieces } = await admin
+  const { data: pieces, error: piecesError } = await admin
     .from('wood_objects')
     .select('public_slug, public_title, title, species, updated_at')
     .eq('account_id', account.id)
     .eq('is_published', true)
     .in('status', FINISHED_STATUSES)
     .order('updated_at', { ascending: false })
+
+  if (piecesError) throw new Error(`maker pieces lookup failed: ${piecesError.message}`)
 
   return <MakerProfile account={account} pieces={pieces} canonicalUrl={`${APP_URL}/${handle}/maker`} />
 }

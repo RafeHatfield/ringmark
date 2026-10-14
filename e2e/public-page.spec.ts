@@ -5,7 +5,7 @@
  *   - Logged-in OWNER visiting /p/[slug] must land on the admin page (not the public page)
  *   - Anonymous users see public content only when the object is published
  *   - private_notes must never leak to anonymous users
- *   - Unknown slugs return a graceful not-found message
+ *   - Unknown slugs are a real 404 (status code and page)
  */
 import { test, expect } from '@playwright/test'
 import path from 'path'
@@ -141,12 +141,16 @@ test('workshop_id never appears on the anonymous public page', async ({ browser 
   await ctx.close()
 })
 
-test('unknown slug shows "could not be found" (not a crash, not a blank page)', async ({ browser }) => {
+test('unknown slug is a real 404 (status and page, not a cached 200 shell)', async ({ browser }) => {
   const ctx = await browser.newContext({ storageState: undefined })
   const page = await ctx.newPage()
 
-  await page.goto('/p/slug-that-definitely-does-not-exist-xyz')
-  await expect(page.getByText('could not be found', { exact: false })).toBeVisible()
+  const response = await page.goto('/p/slug-that-definitely-does-not-exist-xyz')
+  // The status matters as much as the UI: with a loading.tsx on this route the
+  // shell streams first and notFound() can only swap the body, so the 404 was
+  // served (and cached) as a 200 on production.
+  expect(response?.status()).toBe(404)
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
 
   await ctx.close()
 })

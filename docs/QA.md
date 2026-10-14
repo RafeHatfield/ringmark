@@ -113,4 +113,5 @@ Each block is independently testable. Open a second browser in incognito for ano
 ## Error states
 
 - [ ] Navigate to `/objects/00000000-0000-0000-0000-000000000000` → shows a not-found page with a home link (not a blank page, not a crash)
-- [ ] Navigate to `/p/definitely-does-not-exist` → shows "could not be found" message (not a crash)
+- [ ] Navigate to `/p/definitely-does-not-exist` → shows the 404 page, and the response status is 404 (check the network tab; a 200 here means a `loading.tsx` crept back under `/p/[slug]`)
+- [ ] Mark a piece finished and publish it, then open `/maker` → it appears without a redeploy (the write purged the cached maker page)
